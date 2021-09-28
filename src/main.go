@@ -7,8 +7,6 @@ import (
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/insomniacslk/dhcp/dhcpv6/client6"
 	"github.com/insomniacslk/dhcp/iana"
-
-	//"github.com/insomniacslk/dhcp/netboot"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -57,7 +55,7 @@ func dhclient6(ifname string, attempts int, verbose bool) (error, error) {
 	var conv []dhcpv6.DHCPv6
 	for attempt := 0; attempt < attempts; attempt++ {
 		log.Printf("Attempt %d of %d", attempt+1, attempts)
-		conv, err = c.Exchange(ifname, dhcpv6.WithClientID(generateDuid()))
+		conv, err = c.Exchange(ifname, dhcpv6.WithClientID(generateDuid()), dhcpv6.WithIAPD([4]byte{0, 0, 0, 0}))
 		if err != nil && attempt < attempts {
 			log.Printf("Error: %v", err)
 			continue
