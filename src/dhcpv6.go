@@ -60,7 +60,7 @@ func generateDuid(iface *net.Interface) dhcpv6.Duid {
 }
 
 func generateIaid() [4]byte {
-	return [4]byte{0, 0, 0, 0}
+	return [4]byte{76, 61, 73, 74}
 }
 
 func netConfFromReply(reply dhcpv6.DHCPv6) (NetConf, error) {

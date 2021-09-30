@@ -37,6 +37,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	dockerNet, err := selectOrCreateDockerNet(netConf)
+	if err != nil {
+		log.Printf("Error: %v", err)
+		os.Exit(1)
+	}
+	log.Printf("%v", dockerNet)
+
 	go func() {
 		for {
 			time.Sleep(netConf.preferredLifetime)
