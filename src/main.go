@@ -23,7 +23,7 @@ func dhcpRenew() error {
 		log.Printf("DHCPv6 error: %v", err)
 		return err
 	}
-	log.Printf("Received network configuration:\n%s", conf.String())
+	log.Printf("Received network configuration: %s", conf.String())
 	netConf = conf
 	return nil
 }

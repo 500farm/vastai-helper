@@ -189,14 +189,20 @@ func printReceived(m dhcpv6.DHCPv6) {
 func (conf *NetConf) String() string {
 	t := ""
 	for _, a := range conf.dnsServers {
-		t += " " + a.String()
+		if t != "" {
+			t += " "
+		}
+		t += a.String()
 	}
 	u := ""
 	for _, a := range conf.dnsSearchList {
-		u += " " + a
+		if u != "" {
+			u += " "
+		}
+		u += a
 	}
 	return fmt.Sprintf(
-		"Prefix: %s\nPreferred lifetime: %s\nValid lifetime: %s\nDNS servers:%s\nDNS search domains:%s",
+		"%s preflt=%s validlt=%s dns=[%s] search=[%s]",
 		conf.prefix.String(),
 		conf.preferredLifetime.String(),
 		conf.validLifetime.String(),
