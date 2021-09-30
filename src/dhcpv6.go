@@ -29,11 +29,7 @@ func receiveConfWithDhcp(ifname string) (NetConf, error) {
 	log.Printf("DHCPv6 prefix delegation on interface %s (%s)", iface.Name, iface.HardwareAddr.String())
 
 	// fix for "sendto: no route to host"
-	nclient6.AllDHCPRelayAgentsAndServers = &net.UDPAddr{
-		IP:   net.ParseIP("ff02::1:2"),
-		Port: dhcpv6.DefaultServerPort,
-		Zone: ifname,
-	}
+	nclient6.AllDHCPRelayAgentsAndServers.Zone = ifname
 
 	client, err := nclient6.New(ifname, nclient6.WithDebugLogger())
 	if err != nil {
