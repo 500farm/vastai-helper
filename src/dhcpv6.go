@@ -3,23 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net"
-	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/insomniacslk/dhcp/dhcpv6/nclient6"
 	"github.com/insomniacslk/dhcp/iana"
 )
-
-type NetConf struct {
-	prefix            net.IPNet
-	preferredLifetime time.Duration
-	validLifetime     time.Duration
-	dnsServers        []net.IP
-	dnsSearchList     []string
-}
 
 func receiveConfWithDhcp(ctx context.Context, ifname string) (NetConf, error) {
 	iface, err := net.InterfaceByName(ifname)
@@ -101,29 +91,4 @@ func netConfFromReply(reply dhcpv6.DHCPv6) (NetConf, error) {
 		return conf, nil
 	}
 	return NetConf{}, errors.New("No prefixes returned in IA PD")
-}
-
-func (conf *NetConf) String() string {
-	t := ""
-	for _, a := range conf.dnsServers {
-		if t != "" {
-			t += " "
-		}
-		t += a.String()
-	}
-	u := ""
-	for _, a := range conf.dnsSearchList {
-		if u != "" {
-			u += " "
-		}
-		u += a
-	}
-	return fmt.Sprintf(
-		"%s preflt=%s validlt=%s dns=[%s] search=[%s]",
-		conf.prefix.String(),
-		conf.preferredLifetime.String(),
-		conf.validLifetime.String(),
-		t,
-		u,
-	)
 }

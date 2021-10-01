@@ -28,7 +28,6 @@ func startDhcp(ctx context.Context, ifname string) (NetConf, error) {
 func (c *DhcpKeeper) renew() error {
 	netConf, err := receiveConfWithDhcp(c.ctx, c.ifname)
 	if err != nil {
-		log.Printf("DHCPv6 error: %v", err)
 		return err
 	}
 	log.Printf("Received network configuration: %s", netConf.String())
@@ -41,11 +40,12 @@ func (c *DhcpKeeper) renewLoop() {
 	for {
 		time.Sleep(c.netConf.preferredLifetime)
 		for {
-			if err := c.renew(); err == nil {
+			err := c.renew()
+			if err == nil {
 				break
 			}
 			delay := 15 * time.Minute
-			log.Printf("Will retry in %s", delay.String())
+			log.Printf("Error: %v, will retry in %s", err, delay.String())
 			time.Sleep(delay)
 		}
 	}

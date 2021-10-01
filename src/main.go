@@ -13,7 +13,11 @@ var (
 	dhcpInterface = kingpin.Flag(
 		"dhcp-interface",
 		"Interface where to listen for DHCP-PD.",
-	).Required().String()
+	).String()
+	staticPrefix = kingpin.Flag(
+		"static-prefix",
+		"Static IPv6 prefix for address assignment (length from /48 to /96).",
+	).String()
 )
 
 func createDockerClient() *client.Client {
@@ -29,9 +33,26 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
+	if *dhcpInterface == "" && *staticPrefix == "" {
+		log.Printf("Please specify either --dhcp-interface or --static-prefix")
+		os.Exit(1)
+	}
+	if *dhcpInterface != "" && *staticPrefix != "" {
+		log.Printf("Please specify either --dhcp-interface or --static-prefix, not both")
+		os.Exit(1)
+	}
+
 	ctx := context.Background()
-	netConf, err := startDhcp(ctx, *dhcpInterface)
+
+	var netConf NetConf
+	var err error
+	if *dhcpInterface != "" {
+		netConf, err = startDhcp(ctx, *dhcpInterface)
+	} else {
+		netConf, err = staticNetConf(*staticPrefix)
+	}
 	if err != nil {
+		log.Printf("Error: %v", err)
 		os.Exit(1)
 	}
 
