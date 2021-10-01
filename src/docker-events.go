@@ -22,15 +22,18 @@ func startDockerEventLoop(ctx context.Context, cli *client.Client, net DockerNet
 			),
 		})
 
-		select {
-		case event := <-eventChan:
-			err := processEvent(ctx, cli, event, net)
-			if err != nil {
-				log.Printf("Error: %v", err)
+		quit := false
+		for !quit {
+			select {
+			case event := <-eventChan:
+				err := processEvent(ctx, cli, event, net)
+				if err != nil {
+					log.Printf("Error: %v", err)
+				}
+			case err := <-errChan:
+				log.Printf("Error reading events: %v", err)
+				quit = true
 			}
-		case err := <-errChan:
-			log.Printf("Error reading events: %v", err)
-			break
 		}
 
 		cancel()
