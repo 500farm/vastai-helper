@@ -21,17 +21,18 @@ type DockerRule struct {
 }
 
 func attachContainerToNet(ctx context.Context, cli *client.Client, cid string, cname string, net DockerNet) error {
-	ip := randomIp(net.prefix).String()
-	log.Printf("%s: attaching to network %s with IP %s", cname, net.name, ip)
+	ip := randomIp(net.prefix)
+	ipstr := ip.String()
+	log.Printf("%s: attaching to network %s with IP %s", cname, net.name, ipstr)
 	err := cli.NetworkConnect(ctx, net.id, cid, &network.EndpointSettings{
 		IPAMConfig: &network.EndpointIPAMConfig{
-			IPv6Address: ip,
+			IPv6Address: ipstr,
 		},
 	})
 	if err != nil {
 		return err
 	}
-	return routePorts(ctx, cli, cid)
+	return routePorts(ctx, cli, cid, ip)
 }
 
 func cleanupContainer(ctx context.Context, cli *client.Client, cid string) error {
@@ -47,16 +48,16 @@ func randomIp(prefix net.IPNet) net.IP {
 	return result
 }
 
-func routePorts(ctx context.Context, cli *client.Client, cid string) error {
-	return routeOrUnroutePorts(ctx, cli, cid, false)
+func routePorts(ctx context.Context, cli *client.Client, cid string, ip net.IP) error {
+	return routeOrUnroutePorts(ctx, cli, cid, ip, false)
 }
 
 func unroutePorts(ctx context.Context, cli *client.Client, cid string) error {
-	return routeOrUnroutePorts(ctx, cli, cid, true)
+	return routeOrUnroutePorts(ctx, cli, cid, nil, true)
 }
 
-func routeOrUnroutePorts(ctx context.Context, cli *client.Client, cid string, unroute bool) error {
-	rules, str, err := portsToExpose(ctx, cli, cid)
+func routeOrUnroutePorts(ctx context.Context, cli *client.Client, cid string, ip net.IP, unroute bool) error {
+	rules, str, err := portsToExpose(ctx, cli, cid, ip)
 	if err != nil {
 		return err
 	}
@@ -85,25 +86,27 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, cid string, un
 	return nil
 }
 
-func portsToExpose(ctx context.Context, cli *client.Client, cid string) ([]DockerRule, string, error) {
+func portsToExpose(ctx context.Context, cli *client.Client, cid string, ip net.IP) ([]DockerRule, string, error) {
 	rules := []DockerRule{}
 	ctJson, err := cli.ContainerInspect(ctx, cid)
 	if err != nil {
 		return rules, "", err
 	}
 	str := ""
-	ip := net.IP{}
-	for netName, netJson := range ctJson.NetworkSettings.Networks {
-		if strings.HasPrefix(netName, "vastai-") {
-			ipstr := netJson.GlobalIPv6Address
-			gwstr := netJson.IPv6Gateway
-			if ipstr == "" || gwstr == "" {
-				return rules, str, fmt.Errorf("No IP or gateway in config of net %s", netName)
+
+	if ip == nil {
+		for netName, netJson := range ctJson.NetworkSettings.Networks {
+			if strings.HasPrefix(netName, "vastai-") {
+				ipstr := netJson.GlobalIPv6Address
+				if ipstr == "" {
+					return rules, str, fmt.Errorf("No IP address in config of net %s", netName)
+				}
+				ip = net.ParseIP(ipstr)
+				break
 			}
-			ip = net.ParseIP(ipstr)
-			break
 		}
 	}
+
 	for portSpec := range ctJson.NetworkSettings.Ports {
 		startPort, endPort, _ := portSpec.Range()
 		rules = append(rules, DockerRule{
@@ -118,6 +121,7 @@ func portsToExpose(ctx context.Context, cli *client.Client, cid string) ([]Docke
 		str += portSpec.Port()
 	}
 	str += " -> " + ip.String()
+
 	return rules, str, nil
 }
 
