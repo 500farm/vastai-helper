@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 )
@@ -31,6 +32,12 @@ func (c *DhcpKeeper) renew() error {
 		return err
 	}
 	log.Printf("Received network configuration: %s", netConf.String())
+
+	len, _ := netConf.prefix.Mask.Size()
+	if len < 48 || len > 96 {
+		return errors.New("Delegated prefix must be between /48 and /96 in length")
+	}
+
 	c.netConf = netConf
 	return nil
 }
