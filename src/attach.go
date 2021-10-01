@@ -140,5 +140,6 @@ func ruleSpec(rule DockerRule) []string {
 		"-d", rule.ip.String(),
 		"-p", rule.proto,
 		"--dport", fmt.Sprintf("%d:%d", rule.startPort, rule.endPort),
+		"-j", "ACCEPT",
 	}
 }
