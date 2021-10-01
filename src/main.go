@@ -60,4 +60,10 @@ func main() {
 			}
 		}
 	}()
+
+	err = readDockerEvents(ctx)
+	if err != nil {
+		log.Printf("Error: %v", err)
+		os.Exit(1)
+	}
 }
