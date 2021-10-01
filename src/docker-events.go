@@ -42,16 +42,21 @@ func startDockerEventLoop(ctx context.Context, cli *client.Client, net DockerNet
 }
 
 func processEvent(ctx context.Context, cli *client.Client, event events.Message, net DockerNet) error {
+	cid := event.Actor.ID
+	cname := event.Actor.Attributes["name"]
+
 	if event.Action == "create" {
-		cid := event.Actor.ID
-		cname := event.Actor.Attributes["name"]
 		log.Printf(
 			"Event: container started: %s %s %s",
 			cname,
 			cid[0:10],
 			event.Actor.Attributes["image"],
 		)
-		return attachContainerToNet(ctx, cli, cid, cname, net)
+		return attachContainerToNet(ctx, cli, Attachment{
+			cid:   cid,
+			cname: cname,
+			net:   net,
+		})
 	}
 
 	if event.Action == "die" {
@@ -61,7 +66,11 @@ func processEvent(ctx context.Context, cli *client.Client, event events.Message,
 			event.Actor.ID[0:10],
 			event.Actor.Attributes["image"],
 		)
-		return cleanupContainer(ctx, cli, event.Actor.ID)
+		return cleanupContainer(ctx, cli, Attachment{
+			cid:   cid,
+			cname: cname,
+			net:   net,
+		})
 	}
 
 	return nil
