@@ -59,7 +59,9 @@ func processEvent(ctx context.Context, cli *client.Client, event events.Message,
 		ip := randomIp(net.prefix).String()
 		log.Printf("%s: attaching to network %s with IP %s", cname, net.name, ip)
 		err := cli.NetworkConnect(ctx, net.id, cid, &network.EndpointSettings{
-			GlobalIPv6Address: ip,
+			IPAMConfig: &network.EndpointIPAMConfig{
+				IPv6Address: ip,
+			},
 		})
 		if err != nil {
 			return err
