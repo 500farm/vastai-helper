@@ -102,7 +102,7 @@ func createDockerNet(ctx context.Context, netConf NetConf) (DockerNet, error) {
 				Gateway: dockerNet.gateway.String(),
 			}, {
 				// IPv4 subnet is required but won't be used (gateway is empty)
-				// Subnet:
+				Subnet: "127.100.0.0/16", // FIXME
 			}},
 		},
 		Attachable: true,
