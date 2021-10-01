@@ -79,7 +79,7 @@ func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) 
 
 	dockerNet := DockerNet{
 		id:      "",
-		name:    "vastai-ipv6-net", // FIXME duplicate
+		name:    "vastai-ipv6-net", // FIXME duplicate detection
 		prefix:  netConf.prefix,
 		gateway: gwAddress(netConf.prefix),
 	}

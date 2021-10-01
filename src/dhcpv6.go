@@ -12,6 +12,8 @@ import (
 )
 
 func receiveConfWithDhcp(ctx context.Context, ifname string) (NetConf, error) {
+	// TODO does non-rapid solicit work in insomniacslk/dhcp/dhcpv6 library?
+
 	iface, err := net.InterfaceByName(ifname)
 	if err != nil {
 		return NetConf{}, err
