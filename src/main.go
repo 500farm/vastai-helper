@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/docker/docker/client"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -29,6 +30,15 @@ func dhcpRenew(ctx context.Context) error {
 	return nil
 }
 
+func createDockerClient() *client.Client {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Printf("Error: %v", err)
+		os.Exit(1)
+	}
+	return cli
+}
+
 func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
@@ -36,12 +46,6 @@ func main() {
 	ctx := context.Background()
 	err := dhcpRenew(ctx)
 	if err != nil {
-		os.Exit(1)
-	}
-
-	dockerNet, err := selectOrCreateDockerNet(ctx, netConf)
-	if err != nil {
-		log.Printf("Error: %v", err)
 		os.Exit(1)
 	}
 
@@ -60,7 +64,15 @@ func main() {
 		}
 	}()
 
-	err = startDockerEventLoop(ctx, dockerNet)
+	cli := createDockerClient()
+
+	dockerNet, err := selectOrCreateDockerNet(ctx, cli, netConf)
+	if err != nil {
+		log.Printf("Error: %v", err)
+		os.Exit(1)
+	}
+
+	err = startDockerEventLoop(ctx, cli, dockerNet)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		os.Exit(1)

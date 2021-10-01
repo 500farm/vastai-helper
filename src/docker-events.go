@@ -2,24 +2,16 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"log"
-	"net"
 	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 )
 
-func startDockerEventLoop(ctx context.Context, net DockerNet) error {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		return err
-	}
-
+func startDockerEventLoop(ctx context.Context, cli *client.Client, net DockerNet) error {
 	log.Printf("Waiting for docker events")
 
 	for {
@@ -56,16 +48,7 @@ func processEvent(ctx context.Context, cli *client.Client, event events.Message,
 			cid[0:10],
 			event.Actor.Attributes["image"],
 		)
-		ip := randomIp(net.prefix).String()
-		log.Printf("%s: attaching to network %s with IP %s", cname, net.name, ip)
-		err := cli.NetworkConnect(ctx, net.id, cid, &network.EndpointSettings{
-			IPAMConfig: &network.EndpointIPAMConfig{
-				IPv6Address: ip,
-			},
-		})
-		if err != nil {
-			return err
-		}
+		return attachContainerToNet(ctx, cli, cid, cname, net)
 	}
 
 	if event.Action == "die" {
@@ -75,16 +58,8 @@ func processEvent(ctx context.Context, cli *client.Client, event events.Message,
 			event.Actor.ID[0:10],
 			event.Actor.Attributes["image"],
 		)
+		return cleanupContainer(ctx, cli, event.Actor.ID)
 	}
 
 	return nil
-}
-
-func randomIp(prefix net.IPNet) net.IP {
-	result := make([]byte, 16)
-	rand.Read(result)
-	for i := 0; i < 16; i++ {
-		result[i] = (prefix.IP[i] & prefix.Mask[i]) | (result[i] &^ prefix.Mask[i])
-	}
-	return result
 }
