@@ -44,7 +44,6 @@ func main() {
 		log.Printf("Error: %v", err)
 		os.Exit(1)
 	}
-	log.Printf("%v", dockerNet)
 
 	// DHCP renew timer
 	go func() {
@@ -61,7 +60,7 @@ func main() {
 		}
 	}()
 
-	err = readDockerEvents(ctx)
+	err = startDockerEventLoop(ctx, dockerNet)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		os.Exit(1)
