@@ -32,20 +32,11 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att Attachmen
 	ipstr := att.ip.String()
 	log.Printf("%s: attaching to network %s with IP %s", att.cname, att.net.name, ipstr)
 
-	err := cli.NetworkConnect(ctx, att.net.id, att.cid, &network.EndpointSettings{
+	return cli.NetworkConnect(ctx, att.net.id, att.cid, &network.EndpointSettings{
 		IPAMConfig: &network.EndpointIPAMConfig{
 			IPv6Address: ipstr,
 		},
 	})
-	if err != nil {
-		return err
-	}
-
-	return routePorts(ctx, cli, att)
-}
-
-func cleanupContainer(ctx context.Context, cli *client.Client, att Attachment) error {
-	return unroutePorts(ctx, cli, att)
 }
 
 func randomIp(prefix net.IPNet) net.IP {
@@ -66,7 +57,7 @@ func unroutePorts(ctx context.Context, cli *client.Client, att Attachment) error
 }
 
 func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att Attachment, unroute bool) error {
-	rules, str, err := portsToExpose(ctx, cli, att)
+	rules, str, err := portsToExpose(ctx, cli, &att)
 	if err != nil {
 		return err
 	}
@@ -109,7 +100,7 @@ func ruleSpec(rule DockerRule, ip net.IP) []string {
 	}
 }
 
-func portsToExpose(ctx context.Context, cli *client.Client, att Attachment) ([]DockerRule, string, error) {
+func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]DockerRule, string, error) {
 	rules := []DockerRule{}
 	ctJson, err := cli.ContainerInspect(ctx, att.cid)
 	if err != nil {

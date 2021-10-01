@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -44,33 +45,27 @@ func startDockerEventLoop(ctx context.Context, cli *client.Client, net DockerNet
 func processEvent(ctx context.Context, cli *client.Client, event events.Message, net DockerNet) error {
 	cid := event.Actor.ID
 	cname := event.Actor.Attributes["name"]
+	image := event.Actor.Attributes["image"]
+	desc := fmt.Sprintf("%s %s %s", cname, cid[0:10], image)
+	att := Attachment{
+		cid:   cid,
+		cname: cname,
+		net:   net,
+	}
 
 	if event.Action == "create" {
-		log.Printf(
-			"Event: container started: %s %s %s",
-			cname,
-			cid[0:10],
-			event.Actor.Attributes["image"],
-		)
-		return attachContainerToNet(ctx, cli, Attachment{
-			cid:   cid,
-			cname: cname,
-			net:   net,
-		})
+		log.Printf("Event: container created: %s", desc)
+		return attachContainerToNet(ctx, cli, att)
+	}
+
+	if event.Action == "start" {
+		log.Printf("Event: container started: %s", desc)
+		return routePorts(ctx, cli, att)
 	}
 
 	if event.Action == "die" {
-		log.Printf(
-			"Event: container stopped: %s %s %s",
-			event.Actor.Attributes["name"],
-			event.Actor.ID[0:10],
-			event.Actor.Attributes["image"],
-		)
-		return cleanupContainer(ctx, cli, Attachment{
-			cid:   cid,
-			cname: cname,
-			net:   net,
-		})
+		log.Printf("Event: container exited: %s", desc)
+		return unroutePorts(ctx, cli, att)
 	}
 
 	return nil
