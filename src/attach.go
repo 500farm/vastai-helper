@@ -74,9 +74,9 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att Attachment
 		return nil
 	}
 	if !unroute {
-		log.Printf("Exposing ports: %s", str)
+		log.Printf("%s: exposing ports: %s", att.cname, str)
 	} else {
-		log.Printf("Unexposing ports: %s", str)
+		log.Printf("%s: unexposing ports: %s", att.cname, str)
 	}
 
 	ipt, err := iptables.New(iptables.IPFamily(iptables.ProtocolIPv6), iptables.Timeout(1))
