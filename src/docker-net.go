@@ -20,25 +20,24 @@ type DockerNet struct {
 	gateway net.IP
 }
 
-func selectOrCreateDockerNet(netConf NetConf) (DockerNet, error) {
-	dockerNets, err := enumDockerNets()
+func selectOrCreateDockerNet(ctx context.Context, netConf NetConf) (DockerNet, error) {
+	dockerNets, err := enumDockerNets(ctx)
 	if err != nil {
 		return DockerNet{}, err
 	}
 	for _, dockerNet := range dockerNets {
 		if dockerNet.prefix.String() == netConf.prefix.String() &&
 			dockerNet.prefix.Contains(dockerNet.gateway) {
-			log.Printf("Using network: %s", dockerNet.String())
+			log.Printf("Using network:\n    %s", dockerNet.String())
 			return dockerNet, nil
 		}
 	}
-	return createDockerNet(netConf)
+	return createDockerNet(ctx, netConf)
 }
 
-func enumDockerNets() ([]DockerNet, error) {
-	log.Printf("Enumerating IPv6-enabled user-defined docker networks")
+func enumDockerNets(ctx context.Context) ([]DockerNet, error) {
+	log.Printf("Enumerating IPv6-enabled user-defined docker networks:")
 
-	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return []DockerNet{}, err
@@ -78,10 +77,9 @@ func enumDockerNets() ([]DockerNet, error) {
 	return result, nil
 }
 
-func createDockerNet(netConf NetConf) (DockerNet, error) {
-	log.Printf("Creating network")
+func createDockerNet(ctx context.Context, netConf NetConf) (DockerNet, error) {
+	log.Printf("Creating network:")
 
-	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return DockerNet{}, err
@@ -102,6 +100,9 @@ func createDockerNet(netConf NetConf) (DockerNet, error) {
 			Config: []network.IPAMConfig{{
 				Subnet:  dockerNet.prefix.String(),
 				Gateway: dockerNet.gateway.String(),
+			}, {
+				// IPv4 subnet is required but won't be used (gateway is empty)
+				// Subnet:
 			}},
 		},
 		Attachable: true,

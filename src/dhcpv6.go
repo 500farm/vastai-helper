@@ -21,7 +21,7 @@ type NetConf struct {
 	dnsSearchList     []string
 }
 
-func receiveConfWithDhcp(ifname string) (NetConf, error) {
+func receiveConfWithDhcp(ctx context.Context, ifname string) (NetConf, error) {
 	iface, err := net.InterfaceByName(ifname)
 	if err != nil {
 		return NetConf{}, err
@@ -36,7 +36,6 @@ func receiveConfWithDhcp(ifname string) (NetConf, error) {
 		return NetConf{}, err
 	}
 	defer client.Close()
-	ctx := context.Background()
 	reply, err := client.RapidSolicit(ctx, getModifiers(iface)...)
 	if err != nil {
 		return NetConf{}, err

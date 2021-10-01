@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"time"
@@ -17,8 +18,8 @@ var (
 	netConf NetConf
 )
 
-func dhcpRenew() error {
-	conf, err := receiveConfWithDhcp(*dhcpInterface)
+func dhcpRenew(ctx context.Context) error {
+	conf, err := receiveConfWithDhcp(ctx, *dhcpInterface)
 	if err != nil {
 		log.Printf("DHCPv6 error: %v", err)
 		return err
@@ -32,23 +33,25 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
-	err := dhcpRenew()
+	ctx := context.Background()
+	err := dhcpRenew(ctx)
 	if err != nil {
 		os.Exit(1)
 	}
 
-	dockerNet, err := selectOrCreateDockerNet(netConf)
+	dockerNet, err := selectOrCreateDockerNet(ctx, netConf)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		os.Exit(1)
 	}
 	log.Printf("%v", dockerNet)
 
+	// DHCP renew timer
 	go func() {
 		for {
 			time.Sleep(netConf.preferredLifetime)
 			for {
-				if err := dhcpRenew(); err == nil {
+				if err := dhcpRenew(ctx); err == nil {
 					break
 				}
 				delay := 15 * time.Minute
