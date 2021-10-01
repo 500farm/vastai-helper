@@ -11,13 +11,13 @@ import (
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 )
 
 type DockerRule struct {
 	proto     string
 	startPort int
 	endPort   int
-	ip        net.IP
 }
 
 type Attachment struct {
@@ -85,8 +85,8 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att Attachment
 	}
 
 	for _, rule := range rules {
-		spec := ruleSpec(rule)
-		log.Printf("%s", strings.Join(spec, " "))
+		spec := ruleSpec(rule, att.ip)
+		log.Printf("    %s", strings.Join(spec, " "))
 		var err error
 		if !unroute {
 			err = ipt.AppendUnique("filter", "FORWARD", spec...)
@@ -98,6 +98,15 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att Attachment
 		}
 	}
 	return nil
+}
+
+func ruleSpec(rule DockerRule, ip net.IP) []string {
+	return []string{
+		"-d", ip.String(),
+		"-p", rule.proto,
+		"--dport", fmt.Sprintf("%d:%d", rule.startPort, rule.endPort),
+		"-j", "ACCEPT",
+	}
 }
 
 func portsToExpose(ctx context.Context, cli *client.Client, att Attachment) ([]DockerRule, string, error) {
@@ -119,27 +128,45 @@ func portsToExpose(ctx context.Context, cli *client.Client, att Attachment) ([]D
 	}
 
 	for portSpec := range ctJson.Config.ExposedPorts {
-		startPort, endPort, _ := portSpec.Range()
-		rules = append(rules, DockerRule{
-			proto:     portSpec.Proto(),
-			startPort: startPort,
-			endPort:   endPort,
-			ip:        att.ip,
-		})
+		rules = append(rules, portSpecToRule(portSpec))
 		if str != "" {
 			str += " "
 		}
 		str += portSpec.Port()
 	}
 
+	if strings.HasSuffix(att.cname, "/ssh") && !rulesContainPort(rules, "tcp", 22) {
+		rules = append(rules, tcpRule(22))
+	}
+	if strings.HasSuffix(att.cname, "/jupyter") && !rulesContainPort(rules, "tcp", 8080) {
+		rules = append(rules, tcpRule(8080))
+	}
+
 	return rules, str, nil
 }
 
-func ruleSpec(rule DockerRule) []string {
-	return []string{
-		"-d", rule.ip.String(),
-		"-p", rule.proto,
-		"--dport", fmt.Sprintf("%d:%d", rule.startPort, rule.endPort),
-		"-j", "ACCEPT",
+func portSpecToRule(portSpec nat.Port) DockerRule {
+	startPort, endPort, _ := portSpec.Range()
+	return DockerRule{
+		proto:     portSpec.Proto(),
+		startPort: startPort,
+		endPort:   endPort,
 	}
+}
+
+func tcpRule(port int) DockerRule {
+	return DockerRule{
+		proto:     "tcp",
+		startPort: port,
+		endPort:   port,
+	}
+}
+
+func rulesContainPort(rules []DockerRule, proto string, port int) bool {
+	for _, rule := range rules {
+		if proto == rule.proto && port >= rule.startPort && port <= rule.endPort {
+			return true
+		}
+	}
+	return false
 }
