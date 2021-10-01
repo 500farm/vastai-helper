@@ -172,7 +172,7 @@ func rangesContainPort(ports []PortRange, proto string, port int) bool {
 }
 
 func rangesToString(ranges []PortRange) string {
-	str := "'"
+	str := ""
 	for _, r := range ranges {
 		if str != "" {
 			str += " "
