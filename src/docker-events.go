@@ -12,7 +12,7 @@ import (
 	"github.com/docker/docker/client"
 )
 
-func startDockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) error {
+func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
 	log.Printf("Waiting for docker events")
 
 	for {

@@ -57,17 +57,18 @@ func unroutePorts(ctx context.Context, cli *client.Client, att *Attachment) erro
 }
 
 func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachment, unroute bool) error {
-	ranges, str, err := portsToExpose(ctx, cli, att)
+	ranges, err := portsToExpose(ctx, cli, att)
 	if err != nil {
 		return err
 	}
 	if len(ranges) == 0 {
 		return nil
 	}
+	desc := rangesToString(ranges)
 	if !unroute {
-		log.Printf("%s: exposing ports: %s", att.cname, str)
+		log.Printf("%s: exposing ports: %s", att.cname, desc)
 	} else {
-		log.Printf("%s: unexposing ports: %s", att.cname, str)
+		log.Printf("%s: unexposing ports: %s", att.cname, desc)
 	}
 
 	ipt, err := iptables.New(iptables.IPFamily(iptables.ProtocolIPv6), iptables.Timeout(1))
@@ -76,7 +77,7 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachmen
 	}
 
 	for _, r := range ranges {
-		rule := iptablesRule(r, att.ip)
+		rule := r.iptablesRule(att.ip)
 		log.Printf("    %s", strings.Join(rule, " "))
 		var err error
 		if !unroute {
@@ -91,22 +92,12 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachmen
 	return nil
 }
 
-func iptablesRule(r PortRange, ip net.IP) []string {
-	return []string{
-		"-d", ip.String(),
-		"-p", r.proto,
-		"--dport", fmt.Sprintf("%d:%d", r.startPort, r.endPort),
-		"-j", "ACCEPT",
-	}
-}
-
-func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]PortRange, string, error) {
+func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]PortRange, error) {
 	ranges := []PortRange{}
 	ctJson, err := cli.ContainerInspect(ctx, att.cid)
 	if err != nil {
-		return ranges, "", err
+		return ranges, err
 	}
-	str := ""
 
 	if att.ip == nil {
 		for _, netJson := range ctJson.NetworkSettings.Networks {
@@ -120,10 +111,6 @@ func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]
 
 	for portSpec := range ctJson.Config.ExposedPorts {
 		ranges = append(ranges, portSpecToRange(portSpec))
-		if str != "" {
-			str += " "
-		}
-		str += portSpec.Port()
 	}
 
 	if strings.HasSuffix(att.cname, "/ssh") && !rangesContainPort(ranges, "tcp", 22) {
@@ -133,7 +120,7 @@ func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]
 		ranges = append(ranges, singlePort(8080))
 	}
 
-	return ranges, str, nil
+	return ranges, nil
 }
 
 func portSpecToRange(portSpec nat.Port) PortRange {
@@ -153,6 +140,28 @@ func singlePort(port int) PortRange {
 	}
 }
 
+func (r *PortRange) iptablesRule(ip net.IP) []string {
+	dport := ""
+	if r.startPort == r.endPort {
+		dport = fmt.Sprintf("%d", r.startPort)
+	} else {
+		dport = fmt.Sprintf("%d:%d", r.startPort, r.endPort)
+	}
+	return []string{
+		"-d", ip.String(),
+		"-p", r.proto,
+		"--dport", dport,
+		"-j", "ACCEPT",
+	}
+}
+
+func (r *PortRange) String() string {
+	if r.endPort == r.startPort {
+		return fmt.Sprintf("%d/%s", r.startPort, r.proto)
+	}
+	return fmt.Sprintf("%d-%d/%s", r.startPort, r.endPort, r.proto)
+}
+
 func rangesContainPort(ports []PortRange, proto string, port int) bool {
 	for _, r := range ports {
 		if proto == r.proto && port >= r.startPort && port <= r.endPort {
@@ -160,4 +169,15 @@ func rangesContainPort(ports []PortRange, proto string, port int) bool {
 		}
 	}
 	return false
+}
+
+func rangesToString(ranges []PortRange) string {
+	str := "'"
+	for _, r := range ranges {
+		if str != "" {
+			str += " "
+		}
+		str += r.String()
+	}
+	return str
 }
