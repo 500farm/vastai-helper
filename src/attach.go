@@ -14,7 +14,7 @@ import (
 	"github.com/docker/go-connections/nat"
 )
 
-type DockerRule struct {
+type PortRange struct {
 	proto     string
 	startPort int
 	endPort   int
@@ -57,11 +57,11 @@ func unroutePorts(ctx context.Context, cli *client.Client, att Attachment) error
 }
 
 func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att Attachment, unroute bool) error {
-	rules, str, err := portsToExpose(ctx, cli, &att)
+	ranges, str, err := portsToExpose(ctx, cli, &att)
 	if err != nil {
 		return err
 	}
-	if len(rules) == 0 {
+	if len(ranges) == 0 {
 		return nil
 	}
 	if !unroute {
@@ -75,14 +75,14 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att Attachment
 		return err
 	}
 
-	for _, rule := range rules {
-		spec := ruleSpec(rule, att.ip)
-		log.Printf("    %s", strings.Join(spec, " "))
+	for _, r := range ranges {
+		rule := iptablesRule(r, att.ip)
+		log.Printf("    %s", strings.Join(rule, " "))
 		var err error
 		if !unroute {
-			err = ipt.AppendUnique("filter", "FORWARD", spec...)
+			err = ipt.AppendUnique("filter", "FORWARD", rule...)
 		} else {
-			err = ipt.DeleteIfExists("filter", "FORWARD", spec...)
+			err = ipt.DeleteIfExists("filter", "FORWARD", rule...)
 		}
 		if err != nil {
 			log.Printf("Ip6tables error: %v", err)
@@ -91,20 +91,20 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att Attachment
 	return nil
 }
 
-func ruleSpec(rule DockerRule, ip net.IP) []string {
+func iptablesRule(r PortRange, ip net.IP) []string {
 	return []string{
 		"-d", ip.String(),
-		"-p", rule.proto,
-		"--dport", fmt.Sprintf("%d:%d", rule.startPort, rule.endPort),
+		"-p", r.proto,
+		"--dport", fmt.Sprintf("%d:%d", r.startPort, r.endPort),
 		"-j", "ACCEPT",
 	}
 }
 
-func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]DockerRule, string, error) {
-	rules := []DockerRule{}
+func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]PortRange, string, error) {
+	ranges := []PortRange{}
 	ctJson, err := cli.ContainerInspect(ctx, att.cid)
 	if err != nil {
-		return rules, "", err
+		return ranges, "", err
 	}
 	str := ""
 
@@ -119,43 +119,43 @@ func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]
 	}
 
 	for portSpec := range ctJson.Config.ExposedPorts {
-		rules = append(rules, portSpecToRule(portSpec))
+		ranges = append(ranges, portSpecToRange(portSpec))
 		if str != "" {
 			str += " "
 		}
 		str += portSpec.Port()
 	}
 
-	if strings.HasSuffix(att.cname, "/ssh") && !rulesContainPort(rules, "tcp", 22) {
-		rules = append(rules, tcpRule(22))
+	if strings.HasSuffix(att.cname, "/ssh") && !rangesContainPort(ranges, "tcp", 22) {
+		ranges = append(ranges, singlePort(22))
 	}
-	if strings.HasSuffix(att.cname, "/jupyter") && !rulesContainPort(rules, "tcp", 8080) {
-		rules = append(rules, tcpRule(8080))
+	if strings.HasSuffix(att.cname, "/jupyter") && !rangesContainPort(ranges, "tcp", 8080) {
+		ranges = append(ranges, singlePort(8080))
 	}
 
-	return rules, str, nil
+	return ranges, str, nil
 }
 
-func portSpecToRule(portSpec nat.Port) DockerRule {
+func portSpecToRange(portSpec nat.Port) PortRange {
 	startPort, endPort, _ := portSpec.Range()
-	return DockerRule{
+	return PortRange{
 		proto:     portSpec.Proto(),
 		startPort: startPort,
 		endPort:   endPort,
 	}
 }
 
-func tcpRule(port int) DockerRule {
-	return DockerRule{
+func singlePort(port int) PortRange {
+	return PortRange{
 		proto:     "tcp",
 		startPort: port,
 		endPort:   port,
 	}
 }
 
-func rulesContainPort(rules []DockerRule, proto string, port int) bool {
-	for _, rule := range rules {
-		if proto == rule.proto && port >= rule.startPort && port <= rule.endPort {
+func rangesContainPort(ports []PortRange, proto string, port int) bool {
+	for _, r := range ports {
+		if proto == r.proto && port >= r.startPort && port <= r.endPort {
 			return true
 		}
 	}
