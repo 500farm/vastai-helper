@@ -61,15 +61,20 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, cid string, ip
 	if err != nil {
 		return err
 	}
+	if len(rules) == 0 {
+		return nil
+	}
 	if !unroute {
 		log.Printf("Exposing ports: %s", str)
 	} else {
 		log.Printf("Unexposing ports: %s", str)
 	}
+
 	ipt, err := iptables.New(iptables.IPFamily(iptables.ProtocolIPv6), iptables.Timeout(1))
 	if err != nil {
 		return err
 	}
+
 	for _, rule := range rules {
 		spec := ruleSpec(rule)
 		log.Printf("%s", strings.Join(spec, " "))
@@ -96,18 +101,15 @@ func portsToExpose(ctx context.Context, cli *client.Client, cid string, ip net.I
 
 	if ip == nil {
 		for netName, netJson := range ctJson.NetworkSettings.Networks {
-			if strings.HasPrefix(netName, "vastai-") {
-				ipstr := netJson.GlobalIPv6Address
-				if ipstr == "" {
-					return rules, str, fmt.Errorf("No IP address in config of net %s", netName)
-				}
-				ip = net.ParseIP(ipstr)
+			if strings.HasPrefix(netName, "vastai-") &&
+				netJson.IPAMConfig != nil {
+				ip = net.ParseIP(netJson.IPAMConfig.IPv6Address)
 				break
 			}
 		}
 	}
 
-	for portSpec := range ctJson.NetworkSettings.Ports {
+	for portSpec := range ctJson.Config.ExposedPorts {
 		startPort, endPort, _ := portSpec.Range()
 		rules = append(rules, DockerRule{
 			proto:     portSpec.Proto(),
