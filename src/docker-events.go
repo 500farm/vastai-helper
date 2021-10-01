@@ -82,7 +82,7 @@ func randomIp(prefix net.IPNet) net.IP {
 	result := make([]byte, 16)
 	rand.Read(result)
 	for i := 0; i < 16; i++ {
-		result[i] = (prefix.IP[i] & prefix.Mask[i]) | result[i]
+		result[i] = (prefix.IP[i] & prefix.Mask[i]) | (result[i] &^ prefix.Mask[i])
 	}
 	return result
 }

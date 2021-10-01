@@ -28,7 +28,7 @@ func selectOrCreateDockerNet(ctx context.Context, netConf NetConf) (DockerNet, e
 	for _, dockerNet := range dockerNets {
 		if dockerNet.prefix.String() == netConf.prefix.String() &&
 			dockerNet.prefix.Contains(dockerNet.gateway) {
-			log.Printf("Using network:\n    %s", dockerNet.String())
+			log.Printf("Using network: %s", dockerNet.String())
 			return dockerNet, nil
 		}
 	}
@@ -100,9 +100,6 @@ func createDockerNet(ctx context.Context, netConf NetConf) (DockerNet, error) {
 			Config: []network.IPAMConfig{{
 				Subnet:  dockerNet.prefix.String(),
 				Gateway: dockerNet.gateway.String(),
-			}, {
-				// IPv4 subnet is required but won't be used (gateway is empty)
-				Subnet: "127.100.0.0/16", // FIXME
 			}},
 		},
 		Attachable: true,
