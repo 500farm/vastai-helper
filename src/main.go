@@ -66,13 +66,13 @@ func main() {
 
 	cli := createDockerClient()
 
-	dockerNet, err := selectOrCreateDockerNet(ctx, cli, netConf)
+	dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		os.Exit(1)
 	}
 
-	err = startDockerEventLoop(ctx, cli, dockerNet)
+	err = startDockerEventLoop(ctx, cli, &dockerNet)
 	if err != nil {
 		log.Printf("Error: %v", err)
 		os.Exit(1)

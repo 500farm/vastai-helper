@@ -12,7 +12,7 @@ import (
 	"github.com/docker/docker/client"
 )
 
-func startDockerEventLoop(ctx context.Context, cli *client.Client, net DockerNet) error {
+func startDockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) error {
 	log.Printf("Waiting for docker events")
 
 	for {
@@ -27,7 +27,7 @@ func startDockerEventLoop(ctx context.Context, cli *client.Client, net DockerNet
 		for !quit {
 			select {
 			case event := <-eventChan:
-				err := processEvent(ctx, cli, event, net)
+				err := processEvent(ctx, cli, &event, net)
 				if err != nil {
 					log.Printf("Error: %v", err)
 				}
@@ -42,7 +42,7 @@ func startDockerEventLoop(ctx context.Context, cli *client.Client, net DockerNet
 	}
 }
 
-func processEvent(ctx context.Context, cli *client.Client, event events.Message, net DockerNet) error {
+func processEvent(ctx context.Context, cli *client.Client, event *events.Message, net *DockerNet) error {
 	cid := event.Actor.ID
 	if cid == "" {
 		return nil
@@ -58,17 +58,17 @@ func processEvent(ctx context.Context, cli *client.Client, event events.Message,
 
 	if event.Action == "create" {
 		log.Printf("Event: container created: %s", desc)
-		return attachContainerToNet(ctx, cli, att)
+		return attachContainerToNet(ctx, cli, &att)
 	}
 
 	if event.Action == "start" {
 		log.Printf("Event: container started: %s", desc)
-		return routePorts(ctx, cli, att)
+		return routePorts(ctx, cli, &att)
 	}
 
 	if event.Action == "die" {
 		log.Printf("Event: container exited: %s", desc)
-		return unroutePorts(ctx, cli, att)
+		return unroutePorts(ctx, cli, &att)
 	}
 
 	return nil

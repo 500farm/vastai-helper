@@ -20,7 +20,7 @@ type DockerNet struct {
 	gateway net.IP
 }
 
-func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf NetConf) (DockerNet, error) {
+func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
 	dockerNets, err := enumDockerNets(ctx, cli)
 	if err != nil {
 		return DockerNet{}, err
@@ -74,7 +74,7 @@ func enumDockerNets(ctx context.Context, cli *client.Client) ([]DockerNet, error
 	return result, nil
 }
 
-func createDockerNet(ctx context.Context, cli *client.Client, netConf NetConf) (DockerNet, error) {
+func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
 	log.Printf("Creating network:")
 
 	dockerNet := DockerNet{

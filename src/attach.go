@@ -23,11 +23,11 @@ type PortRange struct {
 type Attachment struct {
 	cid   string
 	cname string
-	net   DockerNet
+	net   *DockerNet
 	ip    net.IP
 }
 
-func attachContainerToNet(ctx context.Context, cli *client.Client, att Attachment) error {
+func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachment) error {
 	att.ip = randomIp(att.net.prefix)
 	ipstr := att.ip.String()
 	log.Printf("%s: attaching to network %s with IP %s", att.cname, att.net.name, ipstr)
@@ -48,16 +48,16 @@ func randomIp(prefix net.IPNet) net.IP {
 	return result
 }
 
-func routePorts(ctx context.Context, cli *client.Client, att Attachment) error {
+func routePorts(ctx context.Context, cli *client.Client, att *Attachment) error {
 	return routeOrUnroutePorts(ctx, cli, att, false)
 }
 
-func unroutePorts(ctx context.Context, cli *client.Client, att Attachment) error {
+func unroutePorts(ctx context.Context, cli *client.Client, att *Attachment) error {
 	return routeOrUnroutePorts(ctx, cli, att, true)
 }
 
-func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att Attachment, unroute bool) error {
-	ranges, str, err := portsToExpose(ctx, cli, &att)
+func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachment, unroute bool) error {
+	ranges, str, err := portsToExpose(ctx, cli, att)
 	if err != nil {
 		return err
 	}
