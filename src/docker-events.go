@@ -44,6 +44,9 @@ func startDockerEventLoop(ctx context.Context, cli *client.Client, net DockerNet
 
 func processEvent(ctx context.Context, cli *client.Client, event events.Message, net DockerNet) error {
 	cid := event.Actor.ID
+	if cid == "" {
+		return nil
+	}
 	cname := event.Actor.Attributes["name"]
 	image := event.Actor.Attributes["image"]
 	desc := fmt.Sprintf("%s %s %s", cname, cid[0:10], image)
