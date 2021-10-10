@@ -1,4 +1,4 @@
-module vastai-ipv6
+module vastai-ipv6-daemon
 
 go 1.15
 
