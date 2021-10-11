@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -18,6 +19,10 @@ var (
 		"static-prefix",
 		"Static IPv6 prefix for address assignment (length from /48 to /96).",
 	).String()
+	test = kingpin.Flag(
+		"test",
+		"Perform a self-test of a running daemon.",
+	).Bool()
 )
 
 func createDockerClient() *client.Client {
@@ -32,14 +37,22 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
+	ctx := context.Background()
+
+	if *test {
+		if selfTest(ctx, createDockerClient()) {
+			os.Exit(0)
+		} else {
+			os.Exit(1)
+		}
+	}
+
 	if *dhcpInterface == "" && *staticPrefix == "" {
 		log.Fatal("Please specify either --dhcp-interface or --static-prefix")
 	}
 	if *dhcpInterface != "" && *staticPrefix != "" {
 		log.Fatal("Please specify either --dhcp-interface or --static-prefix, not both")
 	}
-
-	ctx := context.Background()
 
 	var netConf NetConf
 	var err error
