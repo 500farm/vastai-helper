@@ -118,6 +118,9 @@ func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]
 			}
 		}
 	}
+	if att.ip == nil {
+		return ranges, nil
+	}
 
 	for portSpec := range ctJson.Config.ExposedPorts {
 		ranges = append(ranges, portSpecToRange(portSpec))
