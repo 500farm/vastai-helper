@@ -4,9 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"log"
 	"net"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/coreos/go-iptables/iptables"
 	"github.com/docker/docker/api/types/network"
@@ -30,7 +31,9 @@ type Attachment struct {
 func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachment) error {
 	att.ip = randomIp(att.net.prefix)
 	ipstr := att.ip.String()
-	log.Printf("%s: attaching to network %s with IP %s", att.cname, att.net.name, ipstr)
+	log.WithFields(att.logFields()).
+		WithFields(log.Fields{"net": att.net.name, "ip": ipstr}).
+		Info("Attaching container to network")
 
 	return cli.NetworkConnect(ctx, att.net.id, att.cid, &network.EndpointSettings{
 		IPAMConfig: &network.EndpointIPAMConfig{
@@ -64,12 +67,18 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachmen
 	if len(ranges) == 0 {
 		return nil
 	}
-	desc := rangesToString(ranges)
+	var text1, text2 string
 	if !unroute {
-		log.Printf("%s: exposing ports: %s", att.cname, desc)
+		text1 = "Exposing ports"
+		text2 = "Adding ip6tables rule"
 	} else {
-		log.Printf("%s: unexposing ports: %s", att.cname, desc)
+		text1 = "Unexposing ports"
+		text2 = "Removing ip6tables rule"
 	}
+	logger1 := log.WithFields(att.logFields())
+	logger1.
+		WithFields(log.Fields{"ports": rangesToString(ranges)}).
+		Info(text1)
 
 	ipt, err := iptables.New(iptables.IPFamily(iptables.ProtocolIPv6), iptables.Timeout(1))
 	if err != nil {
@@ -78,7 +87,8 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachmen
 
 	for _, r := range ranges {
 		rule := r.iptablesRule(att.ip)
-		log.Printf("    %s", strings.Join(rule, " "))
+		logger2 := logger1.WithFields(log.Fields{"rule": strings.Join(rule, " ")})
+		logger2.Info(text2)
 		var err error
 		if !unroute {
 			err = ipt.AppendUnique("filter", "FORWARD", rule...)
@@ -86,7 +96,7 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachmen
 			err = ipt.DeleteIfExists("filter", "FORWARD", rule...)
 		}
 		if err != nil {
-			log.Printf("Ip6tables error: %v", err)
+			logger1.Error(err)
 		}
 	}
 	return nil
@@ -180,4 +190,12 @@ func rangesToString(ranges []PortRange) string {
 		str += r.String()
 	}
 	return str
+}
+
+func (att *Attachment) logFields() log.Fields {
+	cid := att.cid
+	if len(cid) > 12 {
+		cid = cid[0:12]
+	}
+	return log.Fields{"cid": cid, "cname": att.cname}
 }

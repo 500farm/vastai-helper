@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
@@ -13,13 +14,14 @@ import (
 )
 
 func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
-	log.Printf("Waiting for docker events")
+	log.Info("Waiting for docker events")
 
 	for {
 		ctx, cancel := context.WithCancel(ctx)
 		eventChan, errChan := cli.Events(ctx, types.EventsOptions{
 			Filters: filters.NewArgs(
 				filters.Arg("Type", "container"),
+				filters.Arg("Type", "image"),
 			),
 		})
 
@@ -29,10 +31,10 @@ func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
 			case event := <-eventChan:
 				err := processEvent(ctx, cli, &event, net)
 				if err != nil {
-					log.Printf("Error: %v", err)
+					log.Error(err)
 				}
 			case err := <-errChan:
-				log.Printf("Error reading events: %v", err)
+				log.Error("Error reading docker events: ", err)
 				quit = true
 			}
 		}
@@ -43,32 +45,57 @@ func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
 }
 
 func processEvent(ctx context.Context, cli *client.Client, event *events.Message, net *DockerNet) error {
-	cid := event.Actor.ID
-	if cid == "" {
-		return nil
-	}
-	cname := event.Actor.Attributes["name"]
-	image := event.Actor.Attributes["image"]
-	desc := fmt.Sprintf("%s %s %s", cname, cid[0:10], image)
-	att := Attachment{
-		cid:   cid,
-		cname: cname,
-		net:   net,
+	if event.Type == "container" {
+		cid := event.Actor.ID
+		if cid == "" {
+			return nil
+		}
+		cname := event.Actor.Attributes["name"]
+		att := Attachment{
+			cid:   cid,
+			cname: cname,
+			net:   net,
+		}
+		logger := func() *log.Entry {
+			return log.WithFields(log.Fields{
+				"event": event.Action,
+				"cid":   cid[0:12],
+				"cname": cname,
+				"image": event.Actor.Attributes["image"],
+			})
+		}
+		if event.Action == "create" {
+			logger().Info("Container created")
+			return attachContainerToNet(ctx, cli, &att)
+		}
+		if event.Action == "start" {
+			logger().Info("Container started")
+			return routePorts(ctx, cli, &att)
+		}
+		if event.Action == "die" {
+			logger().Info("Container exited")
+			return unroutePorts(ctx, cli, &att)
+		}
+		if event.Action == "destroy" {
+			logger().Info("Container destroyed")
+			return nil
+		}
+		if strings.HasPrefix(event.Action, "exec_start: ") {
+			logger().
+				WithFields(log.Fields{"event": "exec", "cmd": strings.TrimSpace(event.Action[12:])}).
+				Info("Container exec")
+			return nil
+		}
 	}
 
-	if event.Action == "create" {
-		log.Printf("Event: container created: %s", desc)
-		return attachContainerToNet(ctx, cli, &att)
-	}
-
-	if event.Action == "start" {
-		log.Printf("Event: container started: %s", desc)
-		return routePorts(ctx, cli, &att)
-	}
-
-	if event.Action == "die" {
-		log.Printf("Event: container exited: %s", desc)
-		return unroutePorts(ctx, cli, &att)
+	if event.Type == "image" {
+		if event.Action == "pull" {
+			log.WithFields(log.Fields{
+				"event": "pull",
+				"image": event.Actor.ID,
+			}).Info("Docker image pulled")
+			return nil
+		}
 	}
 
 	return nil

@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type DhcpKeeper struct {
@@ -31,7 +32,7 @@ func (c *DhcpKeeper) renew() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Received network configuration: %s", netConf.String())
+	log.WithFields(netConf.logFields()).Info("Received network configuration")
 
 	len, _ := netConf.prefix.Mask.Size()
 	if len < 48 || len > 96 {
@@ -52,7 +53,7 @@ func (c *DhcpKeeper) renewLoop() {
 				break
 			}
 			delay := 15 * time.Minute
-			log.Printf("Error: %v, will retry in %s", err, delay.String())
+			log.WithFields(log.Fields{"retry": delay}).Error(err)
 			time.Sleep(delay)
 		}
 	}

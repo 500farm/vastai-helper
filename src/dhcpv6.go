@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/insomniacslk/dhcp/dhcpv6/nclient6"
@@ -18,7 +19,8 @@ func receiveConfWithDhcp(ctx context.Context, ifname string) (NetConf, error) {
 	if err != nil {
 		return NetConf{}, err
 	}
-	log.Printf("DHCPv6 prefix delegation on interface %s (%s)", iface.Name, iface.HardwareAddr.String())
+	log.WithFields(log.Fields{"iface": iface.Name, "addr": iface.HardwareAddr.String()}).
+		Info("DHCPv6 prefix delegation")
 
 	// fix for "sendto: no route to host"
 	nclient6.AllDHCPRelayAgentsAndServers.Zone = ifname

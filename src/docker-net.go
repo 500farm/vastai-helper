@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"net"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/docker/docker/api/types"
@@ -29,7 +29,7 @@ func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *N
 	for _, dockerNet := range dockerNets {
 		if dockerNet.prefix.String() == netConf.prefix.String() &&
 			dockerNet.prefix.Contains(dockerNet.gateway) {
-			log.Printf("Using network: %s", dockerNet.String())
+			log.WithFields(dockerNet.logFields()).Info("Using network")
 			return dockerNet, nil
 		}
 	}
@@ -38,7 +38,7 @@ func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *N
 }
 
 func enumDockerNets(ctx context.Context, cli *client.Client) ([]DockerNet, error) {
-	log.Printf("Enumerating IPv6-enabled user-defined docker networks:")
+	log.Info("Enumerating IPv6-enabled user-defined docker networks")
 
 	resp, err := cli.NetworkList(ctx, types.NetworkListOptions{})
 	if err != nil {
@@ -59,7 +59,7 @@ func enumDockerNets(ctx context.Context, cli *client.Client) ([]DockerNet, error
 					if err == nil {
 						dockerNet.prefix = *cidr
 						dockerNet.gateway = net.ParseIP(ipamJson.Gateway)
-						log.Printf("    %s", dockerNet.String())
+						log.WithFields(dockerNet.logFields()).Info("Found network")
 						result = append(result, dockerNet)
 						break
 					}
@@ -69,13 +69,13 @@ func enumDockerNets(ctx context.Context, cli *client.Client) ([]DockerNet, error
 	}
 
 	if len(result) == 0 {
-		log.Printf("    none found")
+		log.Info("None found")
 	}
 	return result, nil
 }
 
 func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
-	log.Printf("Creating network:")
+	log.Info("Will create new network")
 
 	dockerNet := DockerNet{
 		id:      "",
@@ -101,7 +101,7 @@ func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) 
 	}
 
 	dockerNet.id = resp.ID
-	log.Printf("    %s", dockerNet.String())
+	log.WithFields(dockerNet.logFields()).Info("Network created")
 	return dockerNet, nil
 }
 
@@ -110,12 +110,15 @@ func gwAddress(prefix net.IPNet) net.IP {
 	return result
 }
 
-func (net *DockerNet) String() string {
-	return fmt.Sprintf(
-		"%s %s subnet=%s gw=%s",
-		net.name,
-		net.id[0:10],
-		net.prefix.String(),
-		net.gateway.String(),
-	)
+func (net *DockerNet) logFields() log.Fields {
+	id := net.id
+	if len(id) > 12 {
+		id = id[0:12]
+	}
+	return log.Fields{
+		"id":     id,
+		"name":   net.name,
+		"prefix": net.prefix.String(),
+		"gw":     net.gateway.String(),
+	}
 }

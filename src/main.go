@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"log"
-	"os"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/docker/docker/client"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -23,8 +23,7 @@ var (
 func createDockerClient() *client.Client {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Printf("Error: %v", err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 	return cli
 }
@@ -34,12 +33,10 @@ func main() {
 	kingpin.Parse()
 
 	if *dhcpInterface == "" && *staticPrefix == "" {
-		log.Printf("Please specify either --dhcp-interface or --static-prefix")
-		os.Exit(1)
+		log.Fatal("Please specify either --dhcp-interface or --static-prefix")
 	}
 	if *dhcpInterface != "" && *staticPrefix != "" {
-		log.Printf("Please specify either --dhcp-interface or --static-prefix, not both")
-		os.Exit(1)
+		log.Fatal("Please specify either --dhcp-interface or --static-prefix, not both")
 	}
 
 	ctx := context.Background()
@@ -52,15 +49,13 @@ func main() {
 		netConf, err = staticNetConf(*staticPrefix)
 	}
 	if err != nil {
-		log.Printf("Error: %v", err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	cli := createDockerClient()
 	dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)
 	if err != nil {
-		log.Printf("Error: %v", err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	dockerEventLoop(ctx, cli, &dockerNet)

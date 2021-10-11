@@ -2,10 +2,10 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"log"
 	"net"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type NetConf struct {
@@ -16,29 +16,14 @@ type NetConf struct {
 	dnsSearchList     []string
 }
 
-func (conf *NetConf) String() string {
-	t := ""
-	for _, a := range conf.dnsServers {
-		if t != "" {
-			t += " "
-		}
-		t += a.String()
+func (conf *NetConf) logFields() log.Fields {
+	return log.Fields{
+		"prefix":  conf.prefix.String(),
+		"preflt":  conf.preferredLifetime,
+		"validlt": conf.validLifetime,
+		"dns":     conf.dnsServers,
+		"search":  conf.dnsSearchList,
 	}
-	u := ""
-	for _, a := range conf.dnsSearchList {
-		if u != "" {
-			u += " "
-		}
-		u += a
-	}
-	return fmt.Sprintf(
-		"%s preflt=%s validlt=%s dns=[%s] search=[%s]",
-		conf.prefix.String(),
-		conf.preferredLifetime.String(),
-		conf.validLifetime.String(),
-		t,
-		u,
-	)
 }
 
 func staticNetConf(prefix string) (NetConf, error) {
@@ -53,6 +38,7 @@ func staticNetConf(prefix string) (NetConf, error) {
 	if len < 48 || len > 96 {
 		return NetConf{}, errors.New("Please specify an IPv6 prefix between /48 and /96 in length")
 	}
-	log.Printf("Using static IPv6 prefix: %s", net.String())
+	log.WithFields(log.Fields{"prefix": net}).
+		Info("Using static IPv6 prefix")
 	return NetConf{prefix: *net}, nil
 }

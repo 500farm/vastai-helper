@@ -11,6 +11,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/insomniacslk/dhcp v0.0.0-20210827173440-b95caade3eac
 	github.com/morikuni/aec v1.0.0 // indirect
+	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/sys v0.0.0-20210927094055-39ccf1dd6fa6 // indirect
 	google.golang.org/grpc v1.41.0 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
