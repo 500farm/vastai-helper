@@ -1,75 +1,36 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 	log "github.com/sirupsen/logrus"
 )
 
-func selfTestCmd(ctx context.Context, cli *client.Client, name string, cmd []string) (string, error) {
-	log.WithFields(log.Fields{"cmd": strings.Join(cmd, " ")}).Info("Starting self-test: ", name)
-	resp, err := cli.ContainerCreate(ctx,
-		&container.Config{
-			Cmd:   cmd,
-			Image: "jonlabelle/network-tools",
-		},
-		nil, nil, nil, "",
-	)
+func selfTestCmd(ctx context.Context, cli *client.Client, name string, command []string) (string, error) {
+	log.WithFields(log.Fields{"cmd": strings.Join(command, " ")}).Info("Starting self-test: ", name)
+
+	cmd := exec.Command(command[0], command[1:]...)
+	stdout, err := cmd.Output()
+
 	if err != nil {
-		return "", err
-	}
-
-	defer cli.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{})
-
-	err = cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{})
-	if err != nil {
-		return "", err
-	}
-
-	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-	exitCode := 0
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return "", err
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if stderr := string(exitErr.Stderr); stderr != "" {
+				return "", errors.New(stderr)
+			}
+			return "", fmt.Errorf("Exit code %d", exitErr.ExitCode())
 		}
-	case resp := <-statusCh:
-		if resp.StatusCode != 0 {
-			exitCode = int(resp.StatusCode)
-		}
-	}
-
-	reader, err := cli.ContainerLogs(ctx, resp.ID, types.ContainerLogsOptions{ShowStdout: true, ShowStderr: true})
-	if err != nil {
 		return "", err
 	}
 
-	stdout := new(bytes.Buffer)
-	stderr := new(bytes.Buffer)
-	_, err = stdcopy.StdCopy(stdout, stderr, reader)
-	if err != nil {
-		return "", err
-	}
-
-	if exitCode != 0 {
-		if stderrStr := stderr.String(); stderrStr != "" {
-			return "", errors.New(stderrStr)
-		} else {
-			return "", fmt.Errorf("Exit code %d", exitCode)
-		}
-	}
-
-	return stdout.String(), nil
+	return string(stdout), nil
 }
 
 type IpAddrJson []struct {
@@ -153,10 +114,19 @@ func testIpv6Ping(ctx context.Context, cli *client.Client) bool {
 	return true
 }
 
-func selfTest(ctx context.Context, cli *client.Client) bool {
+func main() {
+	ctx := context.Background()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	ok1 := testIpv6Presence(ctx, cli)
 	ok2 := testDns(ctx, cli)
 	ok3 := testIpv4Ping(ctx, cli)
 	ok4 := testIpv6Ping(ctx, cli)
-	return ok1 && ok2 && ok3 && ok4
+
+	if !ok1 || !ok2 || !ok3 || !ok4 {
+		os.Exit(1)
+	}
 }

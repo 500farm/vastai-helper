@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -40,11 +39,10 @@ func main() {
 	ctx := context.Background()
 
 	if *test {
-		if selfTest(ctx, createDockerClient()) {
-			os.Exit(0)
-		} else {
-			os.Exit(1)
+		if err := selfTest(ctx, createDockerClient()); err != nil {
+			log.Fatal(err)
 		}
+		return
 	}
 
 	if *dhcpInterface == "" && *staticPrefix == "" {
