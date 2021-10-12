@@ -77,7 +77,7 @@ func testIpv6Presence(ctx context.Context, cli *client.Client) bool {
 }
 
 func testDns(ctx context.Context, cli *client.Client) bool {
-	out, err := selfTestCmd(ctx, cli, "DNS", []string{"host", "ya.ru"})
+	out, err := selfTestCmd(ctx, cli, "DNS lookup", []string{"host", "ya.ru"})
 	if err != nil {
 		log.Error(err)
 		return false
