@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,9 +15,11 @@ import (
 )
 
 func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
-	log.Info("Waiting for docker events")
+	retry := 5 * time.Second
 
 	for {
+		log.Info("Waiting for docker events")
+
 		ctx, cancel := context.WithCancel(ctx)
 		eventChan, errChan := cli.Events(ctx, types.EventsOptions{
 			Filters: filters.NewArgs(
@@ -34,7 +37,7 @@ func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
 					log.Error(err)
 				}
 			case err := <-errChan:
-				log.Error("Error reading docker events: ", err)
+				log.WithFields(log.Fields{"retry": retry}).Error("Error reading docker events: ", err)
 				quit = true
 			}
 		}
@@ -78,7 +81,18 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			return routePorts(ctx, cli, &att)
 		}
 		if event.Action == "die" {
-			logger().Info("Container exited")
+			exitCode, _ := strconv.Atoi(event.Actor.Attributes["exitCode"])
+			if exitCode == 0 {
+				logger().Info("Container exited normally")
+			} else if exitCode > 128 {
+				logger().
+					WithFields(log.Fields{"signal": exitCode - 128}).
+					Error("Container killed with signal")
+			} else {
+				logger().
+					WithFields(log.Fields{"exitCode": exitCode}).
+					Error("Container exited with error")
+			}
 			return unroutePorts(ctx, cli, &att)
 		}
 		if event.Action == "destroy" {
@@ -89,6 +103,10 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			logger().
 				WithFields(log.Fields{"event": "exec", "cmd": strings.TrimSpace(event.Action[12:])}).
 				Info("Container exec")
+			return nil
+		}
+		if event.Action == "oom" {
+			logger().Error("Container triggered OOM")
 			return nil
 		}
 	}
