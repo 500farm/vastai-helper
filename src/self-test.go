@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 
 	"github.com/docker/docker/api/types"
@@ -12,9 +13,13 @@ import (
 )
 
 func selfTest(ctx context.Context, cli *client.Client) error {
+	fileInfo, _ := os.Stderr.Stat()
+	isTty := (fileInfo.Mode() & os.ModeCharDevice) != 0
+
 	resp, err := cli.ContainerCreate(ctx,
 		&container.Config{
 			Image: "sergeycheperis/vastai-ipv6-self-test",
+			Tty:   isTty,
 		},
 		nil, nil, nil, "self-test",
 	)
@@ -38,7 +43,11 @@ func selfTest(ctx context.Context, cli *client.Client) error {
 		return err
 	}
 
-	go stdcopy.StdCopy(os.Stdout, os.Stderr, out.Reader)
+	if isTty {
+		go io.Copy(os.Stderr, out.Reader)
+	} else {
+		go stdcopy.StdCopy(os.Stderr, os.Stderr, out.Reader)
+	}
 
 	statusCh, errCh := cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 	select {
