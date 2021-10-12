@@ -51,6 +51,11 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			return nil
 		}
 		cname := event.Actor.Attributes["name"]
+		image := event.Actor.Attributes["image"]
+		if strings.HasPrefix(image, "sha256:") {
+			// ignore temporary containers
+			return nil
+		}
 		att := Attachment{
 			cid:   cid,
 			cname: cname,
@@ -61,7 +66,7 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 				"event": event.Action,
 				"cid":   cid[0:12],
 				"cname": cname,
-				"image": event.Actor.Attributes["image"],
+				"image": image,
 			})
 		}
 		if event.Action == "create" {
