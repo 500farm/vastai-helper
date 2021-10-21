@@ -44,7 +44,7 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 				logger.Errorf("Invalid FinishedAt value: %v", info.State.FinishedAt)
 				continue
 			}
-			age := time.Since(finishTs)
+			age := time.Since(finishTs).Round(time.Second)
 			logger = logger.WithField("age", age)
 			if age > *pruneAge {
 				found = true
@@ -74,8 +74,8 @@ func pruneImages(ctx context.Context, cli *client.Client, args filters.Args) boo
 				images = append(images, "deleted: "+im.Deleted)
 			}
 		}
-		log.Infoln("Pruned images:\n" + strings.Join(images, "\n"))
-		log.Infoln("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
+		log.Info("Pruned images:\n" + strings.Join(images, "\n"))
+		log.Infof("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
 		return true
 	}
 	return false
@@ -89,8 +89,8 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 	if err != nil {
 		log.WithField("err", err).Error("Error pruning build cache", err)
 	} else if len(report.CachesDeleted) > 0 {
-		log.Infoln("Pruned build caches:\n" + strings.Join(report.CachesDeleted, "\n"))
-		log.Infoln("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
+		log.Info("Pruned build caches:\n" + strings.Join(report.CachesDeleted, "\n"))
+		log.Infof("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
 		return true
 	}
 	return false
@@ -98,7 +98,7 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 
 func dockerPruneLoop(ctx context.Context, cli *client.Client) {
 	for {
-		log.Infoln("Doing auto-prune")
+		log.Info("Doing auto-prune")
 		ok1 := pruneContainers(ctx, cli)
 		ok2 := pruneImages(ctx, cli, filters.NewArgs(
 			filters.Arg("until", (*pruneAge).String()),
@@ -110,7 +110,7 @@ func dockerPruneLoop(ctx context.Context, cli *client.Client) {
 		))
 		ok4 := pruneBuildCache(ctx, cli)
 		if !ok1 && !ok2 && !ok3 && !ok4 {
-			log.Infoln("Nothing to prune")
+			log.Info("Nothing to prune")
 		}
 		time.Sleep(time.Hour)
 	}
