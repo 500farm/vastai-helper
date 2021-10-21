@@ -1,5 +1,5 @@
 PREFIX=/usr/local
-PROGRAM=vastai-ipv6-daemon
+PROGRAM=vastai-helper
 
 .PHONY: build clean install uninstall
 
