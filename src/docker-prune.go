@@ -27,25 +27,26 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 	}
 	found := false
 	for _, container := range containers {
-		if !strings.HasPrefix(container.Names[0], "C.") { // skip vast.ai containers
+		cname := strings.TrimLeft(container.Names[0], "/")
+		if !strings.HasPrefix(cname, "C.") { // skip vast.ai containers
 			logger := log.WithFields(log.Fields{
 				"cid":   container.ID[:12],
-				"cname": container.Names[0],
+				"cname": cname,
 			})
 			info, err := cli.ContainerInspect(ctx, container.ID)
 			if err != nil {
 				logger.WithField("err", err).Error("Error inspecting container")
 				continue
 			}
-			logger = logger.WithFields(log.Fields{
-				"image": info.Config.Image,
-			})
+			logger = logger.WithField("image", info.Config.Image)
 			finishTs, err := time.Parse(time.RFC3339, info.State.FinishedAt)
 			if err != nil {
 				logger.Errorf("Invalid FinishedAt value: %v", info.State.FinishedAt)
 				continue
 			}
-			if time.Since(finishTs) > *pruneAge {
+			age := time.Since(finishTs)
+			logger = logger.WithField("age", age)
+			if age > *pruneAge {
 				found = true
 				err := cli.ContainerRemove(ctx, info.ID, types.ContainerRemoveOptions{})
 				if err != nil {
