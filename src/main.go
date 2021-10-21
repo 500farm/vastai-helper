@@ -22,6 +22,14 @@ var (
 		"test",
 		"Perform a self-test of a running daemon.",
 	).Bool()
+	pruneAge = kingpin.Flag(
+		"prune-age",
+		"Prune age for stopped containers (non-VastAi), temporary images, build cache.",
+	).Default("24h").Duration()
+	hubImagePruneAge = kingpin.Flag(
+		"hub-image-prune-age",
+		"Prune age for images downloaded from Docker hub.",
+	).Default("168h").Duration()
 )
 
 func createDockerClient() *client.Client {
@@ -49,6 +57,8 @@ func main() {
 	if *dhcpInterface != "" && *staticPrefix != "" {
 		log.Fatal("Please specify either --dhcp-interface or --static-prefix, not both")
 	}
+
+	go dockerPruneLoop(ctx, cli)
 
 	useNetHelper := *dhcpInterface != "" || *staticPrefix != ""
 
