@@ -98,7 +98,10 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 
 func dockerPruneLoop(ctx context.Context, cli *client.Client) {
 	for {
-		log.Info("Doing auto-prune")
+		log.WithFields(log.Fields{
+			"prune-age":           *pruneAge,
+			"hub-image-prune-age": *hubImagePruneAge,
+		}).Info("Doing auto-prune")
 		ok1 := pruneContainers(ctx, cli)
 		ok2 := pruneImages(ctx, cli, filters.NewArgs(
 			filters.Arg("until", (*pruneAge).String()),
