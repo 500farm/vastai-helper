@@ -36,6 +36,7 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
+	cli := createDockerClient()
 	ctx := context.Background()
 
 	if *test {
@@ -45,29 +46,32 @@ func main() {
 		return
 	}
 
-	if *dhcpInterface == "" && *staticPrefix == "" {
-		log.Fatal("Please specify either --dhcp-interface or --static-prefix")
-	}
 	if *dhcpInterface != "" && *staticPrefix != "" {
 		log.Fatal("Please specify either --dhcp-interface or --static-prefix, not both")
 	}
 
-	var netConf NetConf
-	var err error
-	if *dhcpInterface != "" {
-		netConf, err = startDhcp(ctx, *dhcpInterface)
+	useNetHelper := *dhcpInterface != "" || *staticPrefix != ""
+
+	if useNetHelper {
+		var netConf NetConf
+		var err error
+		if *dhcpInterface != "" {
+			netConf, err = startDhcp(ctx, *dhcpInterface)
+		} else {
+			netConf, err = staticNetConf(*staticPrefix)
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dockerEventLoop(ctx, cli, &dockerNet)
+
 	} else {
-		netConf, err = staticNetConf(*staticPrefix)
+		dockerEventLoop(ctx, cli, nil)
 	}
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	cli := createDockerClient()
-	dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	dockerEventLoop(ctx, cli, &dockerNet)
 }
