@@ -22,27 +22,36 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 		),
 	})
 	if err != nil {
-		log.Errorf("Error listing containers: %v", err)
+		log.WithField("err", err).Error("Error listing containers")
 		return false
 	}
 	found := false
 	for _, container := range containers {
 		if !strings.HasPrefix(container.Names[0], "C.") { // skip vast.ai containers
+			logger := log.WithFields(log.Fields{
+				"cid":   container.ID[:12],
+				"cname": container.Names[0],
+			})
 			info, err := cli.ContainerInspect(ctx, container.ID)
 			if err != nil {
-				log.Errorf("Error inspecting container %s: %v", container.ID[:12], err)
+				logger.WithField("err", err).Error("Error inspecting container")
 				continue
 			}
+			logger = logger.WithFields(log.Fields{
+				"image": info.Config.Image,
+			})
 			finishTs, err := time.Parse(time.RFC3339, info.State.FinishedAt)
 			if err != nil {
-				log.Errorf("Container %s has invalid FinishedAt value %v", info.ID[:12], info.State.FinishedAt)
+				logger.Errorf("Invalid FinishedAt value: %v", info.State.FinishedAt)
 				continue
 			}
 			if time.Since(finishTs) > *pruneAge {
 				found = true
 				err := cli.ContainerRemove(ctx, info.ID, types.ContainerRemoveOptions{})
 				if err != nil {
-					log.Errorf("Error removing container %s: %v", container.ID[:12], err)
+					logger.WithField("err", err).Error("Error removing container")
+				} else {
+					logger.Info("Pruned container")
 				}
 			}
 		}
@@ -53,7 +62,7 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 func pruneImages(ctx context.Context, cli *client.Client, args filters.Args) bool {
 	report, err := cli.ImagesPrune(ctx, args)
 	if err != nil {
-		log.Errorf("Error pruning images: %v", err)
+		log.WithField("err", err).Error("Error pruning images", err)
 	} else if len(report.ImagesDeleted) > 0 {
 		images := []string{}
 		for _, im := range report.ImagesDeleted {
@@ -77,7 +86,7 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 		Filters: filters.NewArgs(filters.Arg("until", (*pruneAge).String())),
 	})
 	if err != nil {
-		log.Errorf("Error pruning build cache: %v", err)
+		log.WithField("err", err).Error("Error pruning build cache", err)
 	} else if len(report.CachesDeleted) > 0 {
 		log.Infoln("Pruned build caches:\n" + strings.Join(report.CachesDeleted, "\n"))
 		log.Infoln("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
