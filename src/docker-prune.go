@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -46,7 +48,7 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 			}
 			age := time.Since(finishTs).Round(time.Second)
 			logger = logger.WithField("age", age)
-			if age > *pruneAge {
+			if age > *expireTime {
 				found = true
 				err := cli.ContainerRemove(ctx, info.ID, types.ContainerRemoveOptions{})
 				if err != nil {
@@ -57,24 +59,54 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 			}
 		}
 	}
+	// TODO print summary, space reclaimed
 	return found
 }
 
-func pruneImages(ctx context.Context, cli *client.Client, args filters.Args) bool {
-	report, err := cli.ImagesPrune(ctx, args)
+func pruneImages(ctx context.Context, cli *client.Client) bool {
+	images, err := cli.ImageList(ctx, types.ImageListOptions{})
 	if err != nil {
-		log.WithField("err", err).Error("Error pruning images", err)
-	} else if len(report.ImagesDeleted) > 0 {
-		images := []string{}
-		for _, im := range report.ImagesDeleted {
-			if im.Untagged != "" {
-				images = append(images, "untagged: "+im.Untagged)
-			}
-			if im.Deleted != "" {
-				images = append(images, "deleted: "+im.Deleted)
+		log.WithField("err", err).Error("Error listing images")
+		return false
+	}
+	found := false
+	for _, image := range images {
+		if image.Containers == 0 && len(image.RepoTags) > 0 {
+			expire := getImageExpireTime(image.ID)
+			if expire.Before(time.Now()) {
+				found = true
+				logger := log.WithFields(log.Fields{
+					"id":      image.ID[:12],
+					"tags":    image.RepoTags,
+					"expired": time.Since(expire),
+					"size":    image.Size,
+				})
+				_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
+				if err != nil {
+					logger.WithField("err", err).Error("Error removing image")
+				} else {
+					logger.Info("Pruned image")
+				}
 			}
 		}
-		log.Info("Pruned images:\n" + strings.Join(images, "\n"))
+	}
+	// TODO print summary, space reclaimed
+	return found
+}
+
+func pruneTempImages(ctx context.Context, cli *client.Client) bool {
+	report, err := cli.ImagesPrune(ctx, filters.NewArgs(
+		filters.Arg("until", (*expireTime).String()),
+		filters.Arg("dangling", "true"),
+	))
+	if err != nil {
+		log.WithField("err", err).Error("Error pruning temporary images", err)
+	} else if len(report.ImagesDeleted) > 0 {
+		t := []string{}
+		for _, u := range report.ImagesDeleted {
+			t = append(t, "deleted: "+u.Deleted)
+		}
+		log.Info("Pruned temporary images:\n" + strings.Join(t, "\n"))
 		log.Infof("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
 		return true
 	}
@@ -84,7 +116,7 @@ func pruneImages(ctx context.Context, cli *client.Client, args filters.Args) boo
 func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 	report, err := cli.BuildCachePrune(ctx, types.BuildCachePruneOptions{
 		All:     true,
-		Filters: filters.NewArgs(filters.Arg("until", (*pruneAge).String())),
+		Filters: filters.NewArgs(filters.Arg("until", (*expireTime).String())),
 	})
 	if err != nil {
 		log.WithField("err", err).Error("Error pruning build cache", err)
@@ -99,26 +131,83 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 func dockerPruneLoop(ctx context.Context, cli *client.Client) {
 	for {
 		log.WithFields(log.Fields{
-			"prune-age":           *pruneAge,
-			"hub-image-prune-age": *hubImagePruneAge,
+			"expire-time":              *expireTime,
+			"vastai-image-expire-time": *vastAiImageExpireTime,
+			"interval":                 *pruneInterval,
 		}).Info("Doing auto-prune")
 		ok1 := pruneContainers(ctx, cli)
-		ok2 := pruneImages(ctx, cli, filters.NewArgs(
-			filters.Arg("until", (*pruneAge).String()),
-			filters.Arg("dangling", "true"),
-		))
-		ok3 := pruneImages(ctx, cli, filters.NewArgs(
-			filters.Arg("until", (*hubImagePruneAge).String()),
-			filters.Arg("dangling", "false"),
-		))
+		ok2 := pruneImages(ctx, cli)
+		ok3 := pruneTempImages(ctx, cli)
 		ok4 := pruneBuildCache(ctx, cli)
 		if !ok1 && !ok2 && !ok3 && !ok4 {
 			log.Info("Nothing to prune")
 		}
-		time.Sleep(time.Hour)
+		time.Sleep(*pruneInterval)
 	}
 }
 
 func formatSpace(bytes uint64) string {
 	return fmt.Sprintf("%.2f MiB", float64(bytes/1024/1024))
+}
+
+func setImageExpireTime(id string, t time.Time) {
+	cur := getImageExpireTime(id)
+	if t.After(cur) {
+		ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
+		log.WithFields(log.Fields{
+			"id":      id,
+			"expires": t,
+		}).Info("Setting image expire time")
+	}
+}
+
+func getImageExpireTime(id string) time.Time {
+	str, err := ioutil.ReadFile(pruneStateDir() + "expire_" + id)
+	if err == nil {
+		t, err := time.Parse(time.RFC3339, string(str))
+		if err == nil {
+			return t
+		}
+	}
+	// if no time recorded, set to +vastAiExpireTime from now
+	t := time.Now().Add(*vastAiImageExpireTime)
+	setImageExpireTime(id, t)
+	return t
+}
+
+func removeImageExpireTime(id string) {
+	os.Remove(pruneStateDir() + "expire_" + id)
+}
+
+func pruneStateDir() string {
+	return os.TempDir() + "/vastai-helper/prune/"
+}
+
+func setImageChainExpireTime(ctx context.Context, cli *client.Client, id string, t time.Time) error {
+	chain, err := getImageChain(ctx, cli, id)
+	if err != nil {
+		return err
+	}
+	for _, id2 := range chain {
+		setImageExpireTime(id2, t)
+	}
+	return nil
+}
+
+func getImageChain(ctx context.Context, cli *client.Client, id string) ([]string, error) {
+	history, err := cli.ImageHistory(ctx, id)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"err": err,
+			"id":  id,
+		}).Error("Error getting image history")
+		return []string{}, err
+	}
+	result := []string{}
+	for _, item := range history {
+		if item.ID != "" && len(item.Tags) > 0 {
+			result = append(result, item.ID)
+		}
+	}
+	return result, nil
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -22,14 +23,18 @@ var (
 		"test",
 		"Perform a self-test of a running daemon.",
 	).Bool()
-	pruneAge = kingpin.Flag(
-		"prune-age",
-		"Prune age for stopped containers (non-VastAi), temporary images, build cache.",
+	expireTime = kingpin.Flag(
+		"expire-time",
+		"Expire time for stopped containers (non-VastAi), temporary images, build cache.",
 	).Default("24h").Duration()
-	hubImagePruneAge = kingpin.Flag(
-		"hub-image-prune-age",
-		"Prune age for images downloaded from Docker hub.",
+	vastAiImageExpireTime = kingpin.Flag(
+		"vastai-image-expire-time",
+		"Prune age for images downloaded for Vast.ai containers.",
 	).Default("168h").Duration()
+	pruneInterval = kingpin.Flag(
+		"prune-interval",
+		"Interval between prune runs.",
+	).Default("4h").Duration()
 )
 
 func createDockerClient() *client.Client {
@@ -58,6 +63,7 @@ func main() {
 		log.Fatal("Please specify either --dhcp-interface or --static-prefix, not both")
 	}
 
+	os.MkdirAll(pruneStateDir(), 0700)
 	go dockerPruneLoop(ctx, cli)
 
 	useNetHelper := *dhcpInterface != "" || *staticPrefix != ""
