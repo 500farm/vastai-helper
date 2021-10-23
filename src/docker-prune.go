@@ -167,7 +167,7 @@ func getImageExpireTime(id string) time.Time {
 	}
 	// if no time recorded, set to +vastAiExpireTime from now
 	t := time.Now().Add(*taggedImageExpireTime)
-	setImageExpireTime(id, t)
+	ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
 	return t
 }
 
