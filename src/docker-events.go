@@ -62,49 +62,51 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			// ignore temporary containers
 			return
 		}
-		logger := func() *log.Entry {
-			return log.WithFields(log.Fields{
-				"event": event.Action,
-				"cid":   cid[0:12],
-				"cname": cname,
-				"image": image,
-			})
-		}
+		logger := log.WithFields(log.Fields{
+			"event": event.Action,
+			"cid":   cid[0:12],
+			"cname": cname,
+			"image": image,
+		})
 		if event.Action == "create" {
-			logger().Info("Container created")
+			logger.Info("Container created")
 			return
 		}
 		if event.Action == "start" {
-			logger().Info("Container started")
+			logger.Info("Container started")
 			return
 		}
 		if event.Action == "die" {
 			exitCode, _ := strconv.Atoi(event.Actor.Attributes["exitCode"])
 			if exitCode == 0 {
-				logger().Info("Container exited normally")
+				logger.Info("Container exited normally")
 			} else if exitCode > 128 {
-				logger().
+				logger.
 					WithFields(log.Fields{"signal": exitCode - 128}).
 					Error("Container killed with signal")
 			} else {
-				logger().
+				logger.
 					WithFields(log.Fields{"exitCode": exitCode}).
 					Error("Container exited with error")
 			}
 			return
 		}
 		if event.Action == "destroy" {
-			logger().Info("Container destroyed")
+			logger.Info("Container destroyed")
+			err := setImageChainExpireTime(ctx, cli, image, time.Now().Add(*vastAiImageExpireTime))
+			if err != nil {
+				logger.Error(err)
+			}
 			return
 		}
 		if strings.HasPrefix(event.Action, "exec_start: ") {
-			logger().
+			logger.
 				WithFields(log.Fields{"event": "exec", "cmd": strings.TrimSpace(event.Action[12:])}).
 				Info("Container exec")
 			return
 		}
 		if event.Action == "oom" {
-			logger().Error("Container triggered OOM")
+			logger.Error("Container triggered OOM")
 			return
 		}
 	}
