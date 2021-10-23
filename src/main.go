@@ -27,9 +27,9 @@ var (
 		"expire-time",
 		"Expire time for stopped containers (non-VastAi), temporary images, build cache.",
 	).Default("24h").Duration()
-	vastAiImageExpireTime = kingpin.Flag(
-		"vastai-image-expire-time",
-		"Prune age for images downloaded for Vast.ai containers.",
+	taggedImageExpireTime = kingpin.Flag(
+		"tagged-image-expire-time",
+		"Prune age for tagged images.",
 	).Default("168h").Duration()
 	pruneInterval = kingpin.Flag(
 		"prune-interval",

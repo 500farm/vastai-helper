@@ -93,7 +93,7 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 		}
 		if event.Action == "destroy" {
 			logger.Info("Container destroyed")
-			err := setImageChainExpireTime(ctx, cli, image, time.Now().Add(*vastAiImageExpireTime))
+			err := setImageChainExpireTime(ctx, cli, image, time.Now().Add(*taggedImageExpireTime))
 			if err != nil {
 				logger.Error(err)
 			}

@@ -132,7 +132,7 @@ func dockerPruneLoop(ctx context.Context, cli *client.Client) {
 	for {
 		log.WithFields(log.Fields{
 			"expire-time":              *expireTime,
-			"vastai-image-expire-time": *vastAiImageExpireTime,
+			"tagged-image-expire-time": *taggedImageExpireTime,
 			"interval":                 *pruneInterval,
 		}).Info("Doing auto-prune")
 		ok1 := pruneContainers(ctx, cli)
@@ -166,7 +166,7 @@ func getImageExpireTime(id string) time.Time {
 		}
 	}
 	// if no time recorded, set to +vastAiExpireTime from now
-	t := time.Now().Add(*vastAiImageExpireTime)
+	t := time.Now().Add(*taggedImageExpireTime)
 	setImageExpireTime(id, t)
 	return t
 }
