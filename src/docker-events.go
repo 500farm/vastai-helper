@@ -121,6 +121,10 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 		}
 
 		if event.Action == "delete" {
+			log.WithFields(log.Fields{
+				"event": "delete",
+				"image": event.Actor.ID,
+			}).Info("Docker image removed")
 			removeImageExpireTime(event.Actor.ID)
 			return
 		}
