@@ -76,10 +76,10 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 			if expire.Before(time.Now()) {
 				found = true
 				logger := log.WithFields(log.Fields{
-					"image":  imageIdDisplay(image.ID),
-					"tags":   image.RepoTags,
-					"expire": time.Since(expire),
-					"size":   image.Size,
+					"image":   imageIdDisplay(image.ID),
+					"tags":    image.RepoTags,
+					"expired": time.Since(expire),
+					"size":    image.Size,
 				})
 				_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
 				if err != nil {
@@ -187,9 +187,9 @@ func setImageChainExpireTime(ctx context.Context, cli *client.Client, id string,
 	}
 	for _, item := range chain {
 		log.WithFields(log.Fields{
-			"image":  imageIdDisplay(item.id),
-			"tags":   item.tags,
-			"expire": t,
+			"image":   imageIdDisplay(item.id),
+			"tags":    item.tags,
+			"expires": t.Format(time.RFC3339),
 		}).Info("Setting image expire time")
 		setImageExpireTime(item.id, t)
 	}
