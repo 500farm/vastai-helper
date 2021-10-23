@@ -71,7 +71,7 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 	}
 	found := false
 	for _, image := range images {
-		if image.Containers == 0 && len(image.RepoTags) > 0 {
+		if len(image.RepoTags) > 0 && !isImageUsed(ctx, cli, image.ID) {
 			expire := getImageExpireTime(image.ID)
 			if expire.Before(time.Now()) {
 				found = true
@@ -223,4 +223,19 @@ func imageIdDisplay(id string) string {
 		return ""
 	}
 	return strings.TrimPrefix(id, "sha256:")[:12]
+}
+
+func isImageUsed(ctx context.Context, cli *client.Client, id string) bool {
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
+		All:    true,
+		Latest: true,
+		Filters: filters.NewArgs(
+			filters.Arg("ancestor", id),
+		),
+	})
+	if err != nil {
+		log.WithField("err", err).Error("Error listing containers")
+		return true
+	}
+	return len(containers) > 0
 }
