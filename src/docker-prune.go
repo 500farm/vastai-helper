@@ -76,10 +76,10 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 			if expire.Before(time.Now()) {
 				found = true
 				logger := log.WithFields(log.Fields{
-					"id":      imageIdDisplay(image.ID),
-					"tags":    image.RepoTags,
-					"expired": time.Since(expire),
-					"size":    image.Size,
+					"image":  imageIdDisplay(image.ID),
+					"tags":   image.RepoTags,
+					"expire": time.Since(expire),
+					"size":   image.Size,
 				})
 				_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
 				if err != nil {
@@ -105,6 +105,7 @@ func pruneTempImages(ctx context.Context, cli *client.Client) bool {
 		t := []string{}
 		for _, u := range report.ImagesDeleted {
 			t = append(t, "deleted: "+u.Deleted)
+			// TODO show untagged?
 		}
 		log.Info("Pruned temporary images:\n" + strings.Join(t, "\n"))
 		log.Infof("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
@@ -186,9 +187,9 @@ func setImageChainExpireTime(ctx context.Context, cli *client.Client, id string,
 	}
 	for _, item := range chain {
 		log.WithFields(log.Fields{
-			"id":      imageIdDisplay(item.id),
-			"tags":    item.tags,
-			"expires": t,
+			"image":  imageIdDisplay(item.id),
+			"tags":   item.tags,
+			"expire": t,
 		}).Info("Setting image expire time")
 		setImageExpireTime(item.id, t)
 	}
@@ -205,8 +206,8 @@ func getImageChain(ctx context.Context, cli *client.Client, id string) ([]ImageC
 	history, err := cli.ImageHistory(ctx, id)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"err": err,
-			"id":  imageIdDisplay(id),
+			"err":   err,
+			"image": imageIdDisplay(id),
 		}).Error("Error getting image history")
 		return result, err
 	}
