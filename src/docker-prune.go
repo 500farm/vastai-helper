@@ -176,7 +176,7 @@ func removeImageExpireTime(id string) {
 }
 
 func pruneStateDir() string {
-	return os.TempDir() + "/vastai-helper/prune/"
+	return "/var/lib/vastai-helper/prune/"
 }
 
 func setImageChainExpireTime(ctx context.Context, cli *client.Client, id string, t time.Time) error {
