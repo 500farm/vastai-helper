@@ -76,7 +76,7 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 			if expire.Before(time.Now()) {
 				found = true
 				logger := log.WithFields(log.Fields{
-					"id":      image.ID[:12],
+					"id":      imageIdDisplay(image.ID),
 					"tags":    image.RepoTags,
 					"expired": time.Since(expire),
 					"size":    image.Size,
@@ -154,10 +154,6 @@ func setImageExpireTime(id string, t time.Time) {
 	cur := getImageExpireTime(id)
 	if t.After(cur) {
 		ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
-		log.WithFields(log.Fields{
-			"id":      id,
-			"expires": t,
-		}).Info("Setting image expire time")
 	}
 }
 
@@ -188,26 +184,43 @@ func setImageChainExpireTime(ctx context.Context, cli *client.Client, id string,
 	if err != nil {
 		return err
 	}
-	for _, id2 := range chain {
-		setImageExpireTime(id2, t)
+	for _, item := range chain {
+		log.WithFields(log.Fields{
+			"id":      imageIdDisplay(item.id),
+			"tags":    item.tags,
+			"expires": t,
+		}).Info("Setting image expire time")
+		setImageExpireTime(item.id, t)
 	}
 	return nil
 }
 
-func getImageChain(ctx context.Context, cli *client.Client, id string) ([]string, error) {
+type ImageChainItem struct {
+	id   string
+	tags []string
+}
+
+func getImageChain(ctx context.Context, cli *client.Client, id string) ([]ImageChainItem, error) {
+	result := []ImageChainItem{}
 	history, err := cli.ImageHistory(ctx, id)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err": err,
-			"id":  id,
+			"id":  imageIdDisplay(id),
 		}).Error("Error getting image history")
-		return []string{}, err
+		return result, err
 	}
-	result := []string{}
 	for _, item := range history {
-		if item.ID != "" && len(item.Tags) > 0 {
-			result = append(result, item.ID)
+		if item.ID != "" && item.ID != "<missing>" && len(item.Tags) > 0 {
+			result = append(result, ImageChainItem{item.ID, item.Tags})
 		}
 	}
 	return result, nil
+}
+
+func imageIdDisplay(id string) string {
+	if id == "" {
+		return ""
+	}
+	return strings.TrimPrefix(id, "sha256:")[:12]
 }
