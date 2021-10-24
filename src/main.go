@@ -13,7 +13,7 @@ import (
 var (
 	dhcpInterface = kingpin.Flag(
 		"dhcp-interface",
-		"Interface where to listen for DHCP-PD.",
+		"Interface where to listen for DHCPv6 PD.",
 	).String()
 	staticPrefix = kingpin.Flag(
 		"static-prefix",
@@ -21,7 +21,7 @@ var (
 	).String()
 	test = kingpin.Flag(
 		"test",
-		"Perform a self-test of a running daemon.",
+		"Perform a self-test of network attach functionality of the running daemon.",
 	).Bool()
 	expireTime = kingpin.Flag(
 		"expire-time",
