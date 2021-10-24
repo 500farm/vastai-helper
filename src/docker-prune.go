@@ -71,21 +71,25 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 	}
 	found := false
 	for _, image := range images {
-		if len(image.RepoTags) > 0 && !isImageUsed(ctx, cli, image.ID) {
-			expire := getImageExpireTime(image.ID)
-			if expire.Before(time.Now()) {
-				found = true
-				logger := log.WithFields(log.Fields{
-					"image":   imageIdDisplay(image.ID),
-					"tags":    image.RepoTags,
-					"expired": time.Since(expire),
-					"size":    image.Size,
-				})
-				_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
-				if err != nil {
-					logger.WithField("err", err).Error("Error removing image")
-				} else {
-					logger.Info("Pruned image")
+		if len(image.RepoTags) > 0 {
+			if isImageUsed(ctx, cli, image.ID) {
+				updateImageExpireTime(image.ID)
+			} else {
+				expire := getImageExpireTime(image.ID)
+				if expire.Before(time.Now()) {
+					found = true
+					logger := log.WithFields(log.Fields{
+						"image":   imageIdDisplay(image.ID),
+						"tags":    image.RepoTags,
+						"expired": time.Since(expire),
+						"size":    image.Size,
+					})
+					_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
+					if err != nil {
+						logger.WithField("err", err).Error("Error removing image")
+					} else {
+						logger.Info("Pruned image")
+					}
 				}
 			}
 		}
@@ -151,11 +155,10 @@ func formatSpace(bytes uint64) string {
 	return fmt.Sprintf("%.2f MiB", float64(bytes/1024/1024))
 }
 
-func setImageExpireTime(id string, t time.Time) {
-	cur := getImageExpireTime(id)
-	if t.After(cur) {
-		ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
-	}
+func updateImageExpireTime(id string) time.Time {
+	t := time.Now().Add(*taggedImageExpireTime)
+	ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
+	return t
 }
 
 func getImageExpireTime(id string) time.Time {
@@ -167,9 +170,7 @@ func getImageExpireTime(id string) time.Time {
 		}
 	}
 	// if no time recorded, set to +vastAiExpireTime from now
-	t := time.Now().Add(*taggedImageExpireTime)
-	ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
-	return t
+	return updateImageExpireTime(id)
 }
 
 func removeImageExpireTime(id string) {
@@ -180,18 +181,18 @@ func pruneStateDir() string {
 	return "/var/lib/vastai-helper/prune/"
 }
 
-func setImageChainExpireTime(ctx context.Context, cli *client.Client, id string, t time.Time) error {
+func updateImageChainExpireTime(ctx context.Context, cli *client.Client, id string) error {
 	chain, err := getImageChain(ctx, cli, id)
 	if err != nil {
 		return err
 	}
 	for _, item := range chain {
+		t := updateImageExpireTime(item.id)
 		log.WithFields(log.Fields{
 			"image":   imageIdDisplay(item.id),
 			"tags":    item.tags,
 			"expires": t.Format(time.RFC3339),
 		}).Info("Setting image expire time")
-		setImageExpireTime(item.id, t)
 	}
 	return nil
 }
