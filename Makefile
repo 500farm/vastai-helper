@@ -11,7 +11,7 @@ build: bin/$(PROGRAM)
 clean:
 	@rm -rf ./bin
 
-install: bin/$(PROGRAM) uninstall
+install: bin/$(PROGRAM)
 	mkdir -p $(PREFIX)/bin
 	cp bin/$(PROGRAM) $(PREFIX)/bin/
 	cp systemd/$(PROGRAM).service /etc/systemd/system/
