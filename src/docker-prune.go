@@ -27,7 +27,10 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 		log.WithField("err", err).Error("Error listing containers")
 		return false
 	}
-	found := false
+
+	count := 0
+	size := uint64(0)
+
 	for _, container := range containers {
 		cname := strings.TrimLeft(container.Names[0], "/")
 		if !strings.HasPrefix(cname, "C.") { // skip vast.ai containers
@@ -41,26 +44,34 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 				continue
 			}
 			logger = logger.WithField("image", info.Config.Image)
+
 			finishTs, err := time.Parse(time.RFC3339, info.State.FinishedAt)
 			if err != nil {
 				logger.Errorf("Invalid FinishedAt value: %v", info.State.FinishedAt)
 				continue
 			}
+
 			age := time.Since(finishTs).Round(time.Second)
-			logger = logger.WithField("age", age)
 			if age > *expireTime {
-				found = true
 				err := cli.ContainerRemove(ctx, info.ID, types.ContainerRemoveOptions{})
 				if err != nil {
 					logger.WithField("err", err).Error("Error removing container")
 				} else {
-					logger.Info("Pruned container")
+					count++
+					size += uint64(container.SizeRw)
 				}
 			}
 		}
 	}
-	// TODO print summary, space reclaimed
-	return found
+
+	if count > 0 {
+		log.WithFields(log.Fields{
+			"count": count,
+			"size":  formatSpace(size),
+		}).Info("Pruned containers")
+		return true
+	}
+	return false
 }
 
 func pruneImages(ctx context.Context, cli *client.Client) bool {
@@ -69,33 +80,46 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 		log.WithField("err", err).Error("Error listing images")
 		return false
 	}
-	found := false
+
+	count := 0
+	size := uint64(0)
+	tags := []string{}
+
 	for _, image := range images {
-		if len(image.RepoTags) > 0 {
-			if isImageUsed(ctx, cli, image.ID) {
-				updateImageExpireTime(image.ID)
+		if len(image.RepoTags) == 0 {
+			continue
+		}
+		if isImageUsed(ctx, cli, image.ID) {
+			updateImageExpireTime(image.ID)
+			continue
+		}
+		// unused and tagged image
+		expire := getImageExpireTime(image.ID)
+		if expire.Before(time.Now()) {
+			_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
+			if err != nil {
+				log.WithFields(log.Fields{
+					"image": imageIdDisplay(image.ID),
+					"tags":  image.RepoTags,
+					"err":   err,
+				}).Error("Error removing image")
 			} else {
-				expire := getImageExpireTime(image.ID)
-				if expire.Before(time.Now()) {
-					found = true
-					logger := log.WithFields(log.Fields{
-						"image":   imageIdDisplay(image.ID),
-						"tags":    image.RepoTags,
-						"expired": time.Since(expire),
-						"size":    image.Size,
-					})
-					_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
-					if err != nil {
-						logger.WithField("err", err).Error("Error removing image")
-					} else {
-						logger.Info("Pruned image")
-					}
-				}
+				count++
+				size += uint64(image.Size)
+				tags = append(tags, image.RepoTags...)
 			}
 		}
 	}
-	// TODO print summary, space reclaimed
-	return found
+
+	if count > 0 {
+		log.WithFields(log.Fields{
+			"count": count,
+			"tags":  tags,
+			"size":  formatSpace(size),
+		}).Info("Pruned tagged images")
+		return true
+	}
+	return false
 }
 
 func pruneTempImages(ctx context.Context, cli *client.Client) bool {
