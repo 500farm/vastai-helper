@@ -106,13 +106,21 @@ func pruneTempImages(ctx context.Context, cli *client.Client) bool {
 	if err != nil {
 		log.WithField("err", err).Error("Error pruning temporary images", err)
 	} else if len(report.ImagesDeleted) > 0 {
-		t := []string{}
-		for _, u := range report.ImagesDeleted {
-			t = append(t, "deleted: "+u.Deleted)
-			// TODO show untagged?
+		count := 0
+		tags := []string{}
+		for _, item := range report.ImagesDeleted {
+			if item.Deleted != "" {
+				count++
+			}
+			if item.Untagged != "" {
+				tags = append(tags, item.Untagged)
+			}
 		}
-		log.Info("Pruned temporary images:\n" + strings.Join(t, "\n"))
-		log.Infof("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
+		log.WithFields(log.Fields{
+			"count": count,
+			"tags":  tags,
+			"size":  formatSpace(report.SpaceReclaimed),
+		}).Info("Pruned temporary images")
 		return true
 	}
 	return false
@@ -126,8 +134,10 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 	if err != nil {
 		log.WithField("err", err).Error("Error pruning build cache", err)
 	} else if len(report.CachesDeleted) > 0 {
-		log.Info("Pruned build caches:\n" + strings.Join(report.CachesDeleted, "\n"))
-		log.Infof("Space reclaimed: %s", formatSpace(report.SpaceReclaimed))
+		log.WithFields(log.Fields{
+			"count": len(report.CachesDeleted),
+			"size":  formatSpace(report.SpaceReclaimed),
+		}).Info("Pruned build caches")
 		return true
 	}
 	return false
