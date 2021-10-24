@@ -1,0 +1,11 @@
+[Unit]
+Description=Vast.ai helper service
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/local/bin/vastai-helper
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
