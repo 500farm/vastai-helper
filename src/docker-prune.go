@@ -227,7 +227,7 @@ func updateImageChainExpireTime(ctx context.Context, cli *client.Client, id stri
 			"image":   imageIdDisplay(item.id),
 			"tags":    item.tags,
 			"expires": t.Format(time.RFC3339),
-		}).Info("Setting image expire time")
+		}).Info("Set image expire time")
 	}
 	return nil
 }
