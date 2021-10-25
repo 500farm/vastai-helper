@@ -46,7 +46,7 @@ func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *N
 }
 
 func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]DockerNet, error) {
-	log.Infof("Enumerating IPv6-enabled user-defined %s networks", driver)
+	log.Infof("Enumerating %s networks created by vastai-helper", driver)
 
 	resp, err := cli.NetworkList(ctx, types.NetworkListOptions{})
 	if err != nil {
@@ -55,7 +55,7 @@ func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]D
 
 	result := []DockerNet{}
 	for _, netJson := range resp {
-		if netJson.Attachable && netJson.EnableIPv6 && netJson.Driver == driver {
+		if netJson.Attachable && netJson.EnableIPv6 && netJson.Driver == driver && strings.HasPrefix(netJson.Name, "vastai") {
 			dockerNet := DockerNet{
 				id:     netJson.ID,
 				name:   netJson.Name,
