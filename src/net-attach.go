@@ -45,6 +45,7 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachme
 		ipv4str = att.ipv4.String()
 		log.WithFields(conf.v4.logFields()).
 			Info("Received DHCP lease")
+		// FIXME renewing
 	}
 
 	// attach
