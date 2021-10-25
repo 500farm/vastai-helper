@@ -25,12 +25,13 @@ type Attachment struct {
 	cid   string
 	cname string
 	net   *DockerNet
-	ip    net.IP
+	ipv4  net.IP
+	ipv6  net.IP
 }
 
 func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachment) error {
-	att.ip = randomIp(att.net.v6prefix)
-	ipstr := att.ip.String()
+	att.ipv6 = randomIp(att.net.v6prefix)
+	ipstr := att.ipv6.String()
 	log.WithFields(att.logFields()).
 		WithFields(log.Fields{"net": att.net.name, "ip": ipstr}).
 		Info("Attaching container to network")
@@ -88,7 +89,7 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachmen
 	}
 
 	for _, r := range ranges {
-		rule := r.iptablesRule(att.ip)
+		rule := r.iptablesRule(att.ipv6)
 		logger2 := logger1.WithFields(log.Fields{"rule": strings.Join(rule, " ")})
 		logger2.Info(text2)
 		var err error
@@ -113,16 +114,16 @@ func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]
 		return ranges, err
 	}
 
-	if att.ip == nil {
+	if att.ipv6 == nil {
 		for _, netJson := range ctJson.NetworkSettings.Networks {
 			if netJson.NetworkID == att.net.id &&
 				netJson.IPAMConfig != nil {
-				att.ip = net.ParseIP(netJson.IPAMConfig.IPv6Address)
+				att.ipv6 = net.ParseIP(netJson.IPAMConfig.IPv6Address)
 				break
 			}
 		}
 	}
-	if att.ip == nil {
+	if att.ipv6 == nil {
 		return ranges, nil
 	}
 
