@@ -30,19 +30,38 @@ type Attachment struct {
 }
 
 func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachment) error {
+	// ipv6
 	att.ipv6 = randomIp(att.net.v6prefix)
-	ipstr := att.ipv6.String()
+	ipv6str := att.ipv6.String()
+
+	// ipv4 (for ipvlan only)
+	ipv4str := ""
+	if att.net.driver == "ipvlan" {
+		conf, err := dhcpLeaseV4(ctx, att.net.ifname, att.cid, att.cname)
+		if err != nil {
+			return err
+		}
+		att.ipv4 = conf.v4.prefix.IP
+		ipv4str = att.ipv4.String()
+		log.WithFields(conf.v4.logFields()).
+			Info("Received DHCP lease")
+	}
+
+	// attach
 	log.WithFields(att.logFields()).
-		WithFields(log.Fields{"net": att.net.name, "ip": ipstr}).
+		WithFields(log.Fields{"net": att.net.name, "v6.ip": ipv6str, "v4.ip": ipv4str}).
 		Info("Attaching container to network")
 
 	// TODO also detach from default net?
 
-	return cli.NetworkConnect(ctx, att.net.id, att.cid, &network.EndpointSettings{
-		IPAMConfig: &network.EndpointIPAMConfig{
-			IPv6Address: ipstr,
-		},
-	})
+	ipamConfig := network.EndpointIPAMConfig{
+		IPv6Address: ipv6str,
+	}
+	if ipv4str != "" {
+		ipamConfig.IPv4Address = ipv4str
+	}
+	return cli.NetworkConnect(ctx, att.net.id, att.cid,
+		&network.EndpointSettings{IPAMConfig: &ipamConfig})
 }
 
 func randomIp(prefix net.IPNet) net.IP {
