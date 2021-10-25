@@ -19,7 +19,7 @@ func receiveConfWithDhcpV6(ctx context.Context, ifname string) (NetConf, error) 
 	if err != nil {
 		return NetConf{}, err
 	}
-	log.WithFields(log.Fields{"iface": iface.Name, "addr": iface.HardwareAddr.String()}).
+	log.WithFields(log.Fields{"ifname": iface.Name, "addr": iface.HardwareAddr.String()}).
 		Info("DHCPv6 prefix delegation")
 
 	// fix for "sendto: no route to host"

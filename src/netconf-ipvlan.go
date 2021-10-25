@@ -19,7 +19,7 @@ func ipvlanNetConf(ctx context.Context, ifname string) (NetConf, error) {
 	if err != nil {
 		return NetConf{}, err
 	}
-	log.WithFields(log.Fields{"iface": iface.Name, "addr": iface.HardwareAddr.String(), "ips": addrs}).
+	log.WithFields(log.Fields{"ifname": iface.Name, "addr": iface.HardwareAddr.String(), "ips": addrs}).
 		Info("Using interface")
 
 	netConf := NetConf{
