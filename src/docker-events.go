@@ -93,7 +93,7 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 		}
 		if event.Action == "destroy" {
 			logger.Info("Container destroyed")
-			err := updateImageChainExpireTime(ctx, cli, image)
+			err := updateImageChainExpireTime(ctx, cli, []string{image})
 			if err != nil {
 				logger.Error(err)
 			}

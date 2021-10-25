@@ -103,13 +103,14 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 	count := 0
 	size := uint64(0)
 	tags := []string{}
+	update := []string{}
 
 	for _, image := range images {
 		if len(image.RepoTags) == 0 { // consider only tagged images
 			continue
 		}
-		if isImageUsed(ctx, cli, image.ID) {
-			updateImageChainExpireTime(ctx, cli, image.ID)
+		if isImageUsed(ctx, cli, image.ID) { // for used image, update expiration
+			update = append(update, image.ID)
 			continue
 		}
 		// unused and tagged image
@@ -136,6 +137,9 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 			"size":  formatSpace(size),
 		}).Info("Pruned tagged images")
 		return true
+	}
+	if len(update) > 0 {
+		updateImageChainExpireTime(ctx, cli, update)
 	}
 	return false
 }
@@ -220,28 +224,27 @@ func isImageExpired(ctx context.Context, cli *client.Client, id string) bool {
 		}
 	}
 	// if no time recorded, initialize it
-	updateImageChainExpireTime(ctx, cli, id)
+	updateImageChainExpireTime(ctx, cli, []string{id})
 	return false
 }
 
-func updateImageChainExpireTime(ctx context.Context, cli *client.Client, id string) error {
-	chain, err := getImageChain(ctx, cli, id)
-	if err != nil {
-		return err
-	}
-	if len(chain) == 0 {
-		return nil
-	}
+func updateImageChainExpireTime(ctx context.Context, cli *client.Client, leafIds []string) error {
 	images := []string{}
 	tags := []string{}
-	for _, item := range chain {
-		updateImageExpireTime(item.id)
-		images = append(images, imageIdDisplay(item.id))
-		tags = append(tags, item.tags...)
+	for _, leafId := range unique(leafIds) {
+		chain, err := getImageChain(ctx, cli, leafId)
+		if err != nil {
+			continue
+		}
+		for _, item := range chain {
+			updateImageExpireTime(item.id)
+			images = append(images, imageIdDisplay(item.id))
+			tags = append(tags, item.tags...)
+		}
 	}
 	log.WithFields(log.Fields{
-		"images":  images,
-		"tags":    tags,
+		"images":  unique(images),
+		"tags":    unique(tags),
 		"expires": (time.Now().Add(*taggedImageExpireTime)).Format(time.RFC3339),
 	}).Info("Updated image expiration")
 	return nil
