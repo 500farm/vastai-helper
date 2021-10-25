@@ -147,6 +147,9 @@ func processEventWithNet(ctx context.Context, cli *client.Client, event *events.
 		if event.Action == "create" {
 			return attachContainerToNet(ctx, cli, &att)
 		}
+		if event.Action == "destroy" {
+			return detachContainerFromNet(ctx, cli, &att)
+		}
 		if event.Action == "start" {
 			if net.driver == "bridge" {
 				return routePorts(ctx, cli, &att)

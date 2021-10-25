@@ -24,9 +24,15 @@ var (
 		"ipvlan-interface",
 		"(For ipvlan network) VLAN interface for the network.",
 	).String()
+
+	// testing
 	test = kingpin.Flag(
 		"test",
 		"Perform a self-test of network attach functionality of the running daemon.",
+	).Bool()
+	testDhcpV4 = kingpin.Flag(
+		"test-dhcpv4",
+		"Perform a self-test of DHCPv4 lease/release (requires --ipvlan-interface).",
 	).Bool()
 
 	// auto-prune functionality
@@ -81,6 +87,7 @@ func main() {
 	}
 
 	os.MkdirAll(pruneStateDir(), 0700)
+	os.MkdirAll(leaseStateDir(), 0700)
 	go dockerPruneLoop(ctx, cli)
 
 	if netHelper != None {
@@ -99,6 +106,13 @@ func main() {
 		}
 		if err != nil {
 			log.Fatal(err)
+		}
+
+		if *testDhcpV4 && netHelper == Ipvlan {
+			if err := selfTestDhcpV4(ctx, *ipvlanInterface); err != nil {
+				log.Fatal(err)
+			}
+			return
 		}
 
 		dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)

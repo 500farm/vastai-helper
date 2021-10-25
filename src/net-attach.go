@@ -64,6 +64,18 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachme
 		&network.EndpointSettings{IPAMConfig: &ipamConfig})
 }
 
+func detachContainerFromNet(ctx context.Context, cli *client.Client, att *Attachment) error {
+	if att.net.driver == "ipvlan" {
+		err := dhcpReleaseV4(ctx, att.cid)
+		if err != nil {
+			return err
+		}
+		log.WithFields(log.Fields{"v4.ip": att.ipv4.String()}).
+			Info("Released DHCP lease")
+	}
+	return nil
+}
+
 func randomIp(prefix net.IPNet) net.IP {
 	result := make([]byte, 16)
 	rand.Read(result)
