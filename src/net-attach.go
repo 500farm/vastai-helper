@@ -35,6 +35,8 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachme
 		WithFields(log.Fields{"net": att.net.name, "ip": ipstr}).
 		Info("Attaching container to network")
 
+	// TODO also detach from default net?
+
 	return cli.NetworkConnect(ctx, att.net.id, att.cid, &network.EndpointSettings{
 		IPAMConfig: &network.EndpointIPAMConfig{
 			IPv6Address: ipstr,
@@ -100,6 +102,8 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachmen
 		}
 	}
 	return nil
+
+	// TODO policy=DROP
 }
 
 func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]PortRange, error) {
