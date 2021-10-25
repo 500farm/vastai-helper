@@ -34,7 +34,7 @@ func receiveConfWithDhcpV6(ctx context.Context, ifname string) (NetConf, error) 
 	if err != nil {
 		return NetConf{}, err
 	}
-	return netConfFromReplyV6(reply)
+	return netConfFromReplyV6(reply, ifname)
 }
 
 func getModifiersV6(iface *net.Interface) []dhcpv6.Modifier {
@@ -56,7 +56,7 @@ func generateIaid() [4]byte {
 	return [4]byte{76, 61, 73, 74}
 }
 
-func netConfFromReplyV6(reply dhcpv6.DHCPv6) (NetConf, error) {
+func netConfFromReplyV6(reply dhcpv6.DHCPv6, ifname string) (NetConf, error) {
 	d, err := reply.GetInnerMessage()
 	if err != nil {
 		return NetConf{}, err
@@ -87,6 +87,7 @@ func netConfFromReplyV6(reply dhcpv6.DHCPv6) (NetConf, error) {
 				preferredLifetime: p.PreferredLifetime,
 				validLifetime:     p.ValidLifetime,
 			},
+			ifname: ifname,
 		}
 		// add DNS configuration
 		dns := d.Options.DNS()

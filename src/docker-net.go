@@ -22,6 +22,7 @@ type DockerNet struct {
 	v6gateway net.IP
 	v4prefix  net.IPNet
 	v4gateway net.IP
+	ifname    string // for ipvlan only
 }
 
 func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
@@ -60,6 +61,7 @@ func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]D
 				id:     netJson.ID,
 				name:   netJson.Name,
 				driver: netJson.Driver,
+				ifname: netJson.Options["parent"],
 			}
 			for _, ipamJson := range netJson.IPAM.Config {
 				if ipamJson.Subnet != "" && ipamJson.Gateway != "" {
@@ -93,11 +95,11 @@ func isNetSuitable(net DockerNet, netConf *NetConf) bool {
 	}
 
 	// for mode=ipvlan
-	// TODO also test parent-interface?
 	return net.v6prefix.String() == netConf.v6.prefix.String() &&
 		net.v6gateway.Equal(netConf.v6.gateway) &&
 		net.v4prefix.String() == netConf.v4.prefix.String() &&
-		net.v4gateway.Equal(netConf.v4.gateway)
+		net.v4gateway.Equal(netConf.v4.gateway) &&
+		net.ifname == netConf.ifname
 }
 
 func createDockerNet(ctx context.Context, cli *client.Client, driver string, netConf *NetConf) (DockerNet, error) {
@@ -117,11 +119,13 @@ func createDockerNet(ctx context.Context, cli *client.Client, driver string, net
 		v6gateway: netConf.v6.gateway,
 		v4prefix:  netConf.v4.prefix,
 		v4gateway: netConf.v4.gateway,
+		ifname:    netConf.ifname,
 	}
 
 	options := make(map[string]string)
 	if driver == "ipvlan" {
 		options["ipvlan_mode"] = "l2"
+		options["parent"] = netConf.ifname
 	}
 
 	ipamConfigs := []network.IPAMConfig{}
@@ -174,6 +178,7 @@ func (net *DockerNet) logFields() log.Fields {
 		"id":        id,
 		"name":      net.name,
 		"driver":    net.driver,
+		"ifname":    net.ifname,
 		"v6.prefix": net.v6prefix.String(),
 		"v6.gw":     net.v6gateway.String(),
 		"v4.prefix": net.v4prefix.String(),

@@ -23,7 +23,8 @@ func ipvlanNetConf(ctx context.Context, ifname string) (NetConf, error) {
 		Info("Using interface")
 
 	netConf := NetConf{
-		mode: Ipvlan,
+		mode:   Ipvlan,
+		ifname: ifname,
 	}
 	for _, addr := range addrs {
 		ip, net, _ := net.ParseCIDR(addr.String())

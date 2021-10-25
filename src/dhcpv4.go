@@ -34,7 +34,7 @@ func dhcpLeaseV4(ctx context.Context, ifname string, clientId string, hostName s
 	if err != nil {
 		return NetConf{}, err
 	}
-	return netConfFromReplyV4(reply.ACK)
+	return netConfFromReplyV4(reply.ACK, ifname)
 
 	// TODO renew and release
 }
@@ -47,7 +47,7 @@ func makeDhcpClientId(s string) []byte {
 	return []byte(s)
 }
 
-func netConfFromReplyV4(reply *dhcpv4.DHCPv4) (NetConf, error) {
+func netConfFromReplyV4(reply *dhcpv4.DHCPv4, ifname string) (NetConf, error) {
 	ttl := reply.IPAddressLeaseTime(time.Hour)
 	routers := reply.Router()
 	if len(routers) == 0 {
@@ -65,6 +65,7 @@ func netConfFromReplyV4(reply *dhcpv4.DHCPv4) (NetConf, error) {
 			validLifetime:     ttl,
 		},
 		dnsServers: reply.DNS(),
+		ifname:     ifname,
 	}
 	search := reply.DomainSearch()
 	if search != nil {

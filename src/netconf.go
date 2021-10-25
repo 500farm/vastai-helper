@@ -19,6 +19,7 @@ type NetConf struct {
 	dnsServers    []net.IP
 	dnsSearchList []string
 	mode          NetHelperMode
+	ifname        string
 }
 
 type NetHelperMode int
@@ -53,7 +54,8 @@ func (p *NetConfPrefix) logFields() log.Fields {
 
 func (conf *NetConf) logFields() log.Fields {
 	return log.Fields{
-		"mode": conf.mode,
+		"mode":   conf.mode,
+		"ifname": conf.ifname,
 
 		"v6.prefix":  conf.v6.prefix.String(),
 		"v6.gw":      conf.v6.gateway.String(),
