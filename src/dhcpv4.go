@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"net"
 	"time"
@@ -27,13 +28,23 @@ func dhcpLeaseV4(ctx context.Context, ifname string, clientId string, hostName s
 	defer client.Close()
 	reply, err := client.Request(
 		ctx,
-		dhcpv4.WithOption(dhcpv4.OptClientIdentifier([]byte(clientId))),
+		dhcpv4.WithOption(dhcpv4.OptClientIdentifier(makeDhcpClientId(clientId))),
 		dhcpv4.WithOption(dhcpv4.OptHostName(hostName)),
 	)
 	if err != nil {
 		return NetConf{}, err
 	}
 	return netConfFromReplyV4(reply.ACK)
+
+	// TODO renew and release
+}
+
+func makeDhcpClientId(s string) []byte {
+	data, err := hex.DecodeString(s)
+	if err == nil {
+		return data
+	}
+	return []byte(s)
 }
 
 func netConfFromReplyV4(reply *dhcpv4.DHCPv4) (NetConf, error) {
