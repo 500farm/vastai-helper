@@ -14,6 +14,25 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func dockerPruneLoop(ctx context.Context, cli *client.Client) {
+	time.Sleep(time.Minute)
+	for {
+		log.WithFields(log.Fields{
+			"expire-time":              *expireTime,
+			"tagged-image-expire-time": *taggedImageExpireTime,
+			"interval":                 *pruneInterval,
+		}).Info("Doing auto-prune")
+		ok1 := pruneContainers(ctx, cli)
+		ok2 := pruneImages(ctx, cli)
+		ok3 := pruneTempImages(ctx, cli)
+		ok4 := pruneBuildCache(ctx, cli)
+		if !ok1 && !ok2 && !ok3 && !ok4 {
+			log.Info("Nothing to prune")
+		}
+		time.Sleep(*pruneInterval)
+	}
+}
+
 func pruneContainers(ctx context.Context, cli *client.Client) bool {
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
 		All: true,
@@ -86,16 +105,15 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 	tags := []string{}
 
 	for _, image := range images {
-		if len(image.RepoTags) == 0 {
+		if len(image.RepoTags) == 0 { // consider only tagged images
 			continue
 		}
 		if isImageUsed(ctx, cli, image.ID) {
-			updateImageExpireTime(image.ID)
+			updateImageChainExpireTime(ctx, cli, image.ID)
 			continue
 		}
 		// unused and tagged image
-		expire := getImageExpireTime(image.ID)
-		if expire.Before(time.Now()) {
+		if isImageExpired(ctx, cli, image.ID) {
 			_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
 			if err != nil {
 				log.WithFields(log.Fields{
@@ -167,53 +185,43 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 	return false
 }
 
-func dockerPruneLoop(ctx context.Context, cli *client.Client) {
-	time.Sleep(time.Minute)
-	for {
-		log.WithFields(log.Fields{
-			"expire-time":              *expireTime,
-			"tagged-image-expire-time": *taggedImageExpireTime,
-			"interval":                 *pruneInterval,
-		}).Info("Doing auto-prune")
-		ok1 := pruneContainers(ctx, cli)
-		ok2 := pruneImages(ctx, cli)
-		ok3 := pruneTempImages(ctx, cli)
-		ok4 := pruneBuildCache(ctx, cli)
-		if !ok1 && !ok2 && !ok3 && !ok4 {
-			log.Info("Nothing to prune")
-		}
-		time.Sleep(*pruneInterval)
-	}
-}
-
 func formatSpace(bytes uint64) string {
 	return fmt.Sprintf("%.2f MiB", float64(bytes/1024/1024))
 }
 
-func updateImageExpireTime(id string) time.Time {
-	t := time.Now().Add(*taggedImageExpireTime)
-	ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
-	return t
+func imageIdDisplay(id string) string {
+	if id == "" {
+		return ""
+	}
+	return strings.TrimPrefix(id, "sha256:")[:12]
 }
 
-func getImageExpireTime(id string) time.Time {
+func isImageUsed(ctx context.Context, cli *client.Client, id string) bool {
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
+		All:    true,
+		Latest: true,
+		Filters: filters.NewArgs(
+			filters.Arg("ancestor", id),
+		),
+	})
+	if err != nil {
+		log.WithField("err", err).Error("Error listing containers")
+		return true
+	}
+	return len(containers) > 0
+}
+
+func isImageExpired(ctx context.Context, cli *client.Client, id string) bool {
 	str, err := ioutil.ReadFile(pruneStateDir() + "expire_" + id)
 	if err == nil {
-		t, err := time.Parse(time.RFC3339, string(str))
+		expire, err := time.Parse(time.RFC3339, string(str))
 		if err == nil {
-			return t
+			return expire.Before(time.Now())
 		}
 	}
-	// if no time recorded, set to +vastAiExpireTime from now
-	return updateImageExpireTime(id)
-}
-
-func removeImageExpireTime(id string) {
-	os.Remove(pruneStateDir() + "expire_" + id)
-}
-
-func pruneStateDir() string {
-	return "/var/lib/vastai-helper/prune/"
+	// if no time recorded, initialize it
+	updateImageChainExpireTime(ctx, cli, id)
+	return false
 }
 
 func updateImageChainExpireTime(ctx context.Context, cli *client.Client, id string) error {
@@ -221,14 +229,18 @@ func updateImageChainExpireTime(ctx context.Context, cli *client.Client, id stri
 	if err != nil {
 		return err
 	}
+	images := []string{}
+	tags := []string{}
 	for _, item := range chain {
-		t := updateImageExpireTime(item.id)
-		log.WithFields(log.Fields{
-			"image":   imageIdDisplay(item.id),
-			"tags":    item.tags,
-			"expires": t.Format(time.RFC3339),
-		}).Info("Set image expire time")
+		updateImageExpireTime(item.id)
+		images = append(images, imageIdDisplay(item.id))
+		tags = append(tags, item.tags...)
 	}
+	log.WithFields(log.Fields{
+		"images":  images,
+		"tags":    tags,
+		"expires": (time.Now().Add(*taggedImageExpireTime)).Format(time.RFC3339),
+	}).Info("Updated image expiration")
 	return nil
 }
 
@@ -255,24 +267,15 @@ func getImageChain(ctx context.Context, cli *client.Client, id string) ([]ImageC
 	return result, nil
 }
 
-func imageIdDisplay(id string) string {
-	if id == "" {
-		return ""
-	}
-	return strings.TrimPrefix(id, "sha256:")[:12]
+func updateImageExpireTime(id string) {
+	t := time.Now().Add(*taggedImageExpireTime)
+	ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
 }
 
-func isImageUsed(ctx context.Context, cli *client.Client, id string) bool {
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
-		All:    true,
-		Latest: true,
-		Filters: filters.NewArgs(
-			filters.Arg("ancestor", id),
-		),
-	})
-	if err != nil {
-		log.WithField("err", err).Error("Error listing containers")
-		return true
-	}
-	return len(containers) > 0
+func removeImageExpireTime(id string) {
+	os.Remove(pruneStateDir() + "expire_" + id)
+}
+
+func pruneStateDir() string {
+	return "/var/lib/vastai-helper/prune/"
 }
