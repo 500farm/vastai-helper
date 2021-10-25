@@ -79,15 +79,25 @@ func main() {
 		}
 		netHelper = Bridge
 	}
+
 	if *ipvlanInterface != "" {
 		if netHelper != None {
 			log.Fatal("Please use args either for bridge mode or for ipvlan, not both")
 		}
 		netHelper = Ipvlan
+
+		os.MkdirAll(leaseStateDir(), 0700)
+		if *testDhcpV4 {
+			if err := selfTestDhcpV4(ctx, *ipvlanInterface); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+
+		go dhcpRenewLoopV4(ctx)
 	}
 
 	os.MkdirAll(pruneStateDir(), 0700)
-	os.MkdirAll(leaseStateDir(), 0700)
 	go dockerPruneLoop(ctx, cli)
 
 	if netHelper != None {
@@ -106,13 +116,6 @@ func main() {
 		}
 		if err != nil {
 			log.Fatal(err)
-		}
-
-		if *testDhcpV4 && netHelper == Ipvlan {
-			if err := selfTestDhcpV4(ctx, *ipvlanInterface); err != nil {
-				log.Fatal(err)
-			}
-			return
 		}
 
 		dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)

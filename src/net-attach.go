@@ -37,15 +37,14 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachme
 	// ipv4 (for ipvlan only)
 	ipv4str := ""
 	if att.net.driver == "ipvlan" {
-		conf, err := dhcpLeaseV4(ctx, att.net.ifname, att.cid, att.cname)
+		lease, err := dhcpLeaseV4(ctx, att.net.ifname, makeDhcpClientId(att.cid), att.cname, nil)
 		if err != nil {
 			return err
 		}
+		conf := lease.toNetConf()
 		att.ipv4 = conf.v4.prefix.IP
 		ipv4str = att.ipv4.String()
-		log.WithFields(conf.v4.logFields()).
-			Info("Received DHCP lease")
-		// FIXME renewing
+		log.WithFields(lease.logFields()).Info("Received DHCP lease")
 	}
 
 	// attach
@@ -67,7 +66,7 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachme
 
 func detachContainerFromNet(ctx context.Context, cli *client.Client, att *Attachment) error {
 	if att.net.driver == "ipvlan" {
-		err := dhcpReleaseV4(ctx, att.cid)
+		err := dhcpReleaseV4(ctx, makeDhcpClientId(att.cid))
 		if err != nil {
 			return err
 		}

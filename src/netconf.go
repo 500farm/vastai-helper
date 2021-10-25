@@ -43,7 +43,7 @@ func gwAddress(prefix net.IPNet) net.IP {
 	return result
 }
 
-func (p *NetConfPrefix) logFields() log.Fields {
+func (p NetConfPrefix) logFields() log.Fields {
 	return log.Fields{
 		"prefix":  p.prefix.String(),
 		"gw":      p.gateway.String(),
@@ -52,7 +52,7 @@ func (p *NetConfPrefix) logFields() log.Fields {
 	}
 }
 
-func (conf *NetConf) logFields() log.Fields {
+func (conf NetConf) logFields() log.Fields {
 	return log.Fields{
 		"mode":   conf.mode,
 		"ifname": conf.ifname,
