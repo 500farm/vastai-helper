@@ -168,6 +168,7 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 }
 
 func dockerPruneLoop(ctx context.Context, cli *client.Client) {
+	time.Sleep(time.Minute)
 	for {
 		log.WithFields(log.Fields{
 			"expire-time":              *expireTime,
