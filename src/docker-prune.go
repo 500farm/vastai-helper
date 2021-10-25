@@ -277,5 +277,5 @@ func removeImageExpireTime(id string) {
 }
 
 func pruneStateDir() string {
-	return "/var/lib/vastai-helper/prune/"
+	return stateDir() + "prune/"
 }
