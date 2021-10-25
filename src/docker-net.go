@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"net"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 )
@@ -16,12 +18,13 @@ import (
 type DockerNet struct {
 	id      string
 	name    string
+	driver  string
 	prefix  net.IPNet
 	gateway net.IP
 }
 
-func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
-	dockerNets, err := enumDockerNets(ctx, cli)
+func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, driver string, netConf *NetConf) (DockerNet, error) {
+	dockerNets, err := enumDockerNets(ctx, cli, driver)
 	if err != nil {
 		return DockerNet{}, err
 	}
@@ -34,11 +37,11 @@ func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *N
 		}
 	}
 
-	return createDockerNet(ctx, cli, netConf)
+	return createDockerNet(ctx, cli, driver, netConf)
 }
 
-func enumDockerNets(ctx context.Context, cli *client.Client) ([]DockerNet, error) {
-	log.Info("Enumerating IPv6-enabled user-defined docker networks")
+func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]DockerNet, error) {
+	log.Infof("Enumerating IPv6-enabled user-defined %s networks", driver)
 
 	resp, err := cli.NetworkList(ctx, types.NetworkListOptions{})
 	if err != nil {
@@ -47,10 +50,11 @@ func enumDockerNets(ctx context.Context, cli *client.Client) ([]DockerNet, error
 
 	result := []DockerNet{}
 	for _, netJson := range resp {
-		if netJson.Attachable && netJson.EnableIPv6 && netJson.Driver == "bridge" {
+		if netJson.Attachable && netJson.EnableIPv6 && netJson.Driver == driver {
 			dockerNet := DockerNet{
-				id:   netJson.ID,
-				name: netJson.Name,
+				id:     netJson.ID,
+				name:   netJson.Name,
+				driver: netJson.Driver,
 			}
 			for _, ipamJson := range netJson.IPAM.Config {
 				if strings.Contains(ipamJson.Subnet, ":") &&
@@ -74,8 +78,8 @@ func enumDockerNets(ctx context.Context, cli *client.Client) ([]DockerNet, error
 	return result, nil
 }
 
-func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
-	log.Info("Will create new network")
+func createDockerNet(ctx context.Context, cli *client.Client, driver string, netConf *NetConf) (DockerNet, error) {
+	log.Infof("Will create new %s network", driver)
 
 	name := "vastai-ipv6-net"
 	i := 0
@@ -91,8 +95,14 @@ func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) 
 		gateway: gwAddress(netConf.prefix),
 	}
 
+	options := make(map[string]string)
+	if driver == "ipvlan" {
+		options["ipvlan_mode"] = "l3"
+	}
+
 	resp, err := cli.NetworkCreate(ctx, dockerNet.name, types.NetworkCreate{
 		CheckDuplicate: true,
+		Driver:         driver,
 		EnableIPv6:     true,
 		IPAM: &network.IPAM{
 			Driver: "default",
@@ -102,6 +112,7 @@ func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) 
 			}},
 		},
 		Attachable: true,
+		Options:    options,
 	})
 	if err != nil {
 		return DockerNet{}, err
@@ -132,6 +143,7 @@ func (net *DockerNet) logFields() log.Fields {
 	return log.Fields{
 		"id":     id,
 		"name":   net.name,
+		"driver": net.driver,
 		"prefix": net.prefix.String(),
 		"gw":     net.gateway.String(),
 	}

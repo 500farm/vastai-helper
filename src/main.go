@@ -19,6 +19,10 @@ var (
 		"static-prefix",
 		"Static IPv6 prefix for address assignment (length from /48 to /96).",
 	).String()
+	ipvlan = kingpin.Flag(
+		"ipvlan",
+		"Use ipvlan network instead of bridge",
+	).Bool()
 	test = kingpin.Flag(
 		"test",
 		"Perform a self-test of network attach functionality of the running daemon.",
@@ -80,7 +84,11 @@ func main() {
 			log.Fatal(err)
 		}
 
-		dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)
+		driver := "bridge"
+		if *ipvlan {
+			driver = "ipvlan"
+		}
+		dockerNet, err := selectOrCreateDockerNet(ctx, cli, driver, &netConf)
 		if err != nil {
 			log.Fatal(err)
 		}
