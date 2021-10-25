@@ -29,7 +29,7 @@ type Attachment struct {
 }
 
 func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachment) error {
-	att.ip = randomIp(att.net.prefix)
+	att.ip = randomIp(att.net.v6prefix)
 	ipstr := att.ip.String()
 	log.WithFields(att.logFields()).
 		WithFields(log.Fields{"net": att.net.name, "ip": ipstr}).

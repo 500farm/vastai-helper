@@ -14,10 +14,20 @@ type NetConf struct {
 	validLifetime     time.Duration
 	dnsServers        []net.IP
 	dnsSearchList     []string
+	mode              NetHelperMode
 }
+
+type NetHelperMode int
+
+const (
+	None NetHelperMode = iota
+	Bridge
+	Ipvlan
+)
 
 func (conf *NetConf) logFields() log.Fields {
 	return log.Fields{
+		"mode":    conf.mode,
 		"prefix":  conf.prefix.String(),
 		"preflt":  conf.preferredLifetime,
 		"validlt": conf.validLifetime,
@@ -26,7 +36,7 @@ func (conf *NetConf) logFields() log.Fields {
 	}
 }
 
-func staticNetConf(prefix string) (NetConf, error) {
+func staticBridgeNetConf(prefix string) (NetConf, error) {
 	_, net, err := net.ParseCIDR(prefix)
 	if err != nil {
 		return NetConf{}, err
@@ -40,5 +50,5 @@ func staticNetConf(prefix string) (NetConf, error) {
 	}
 	log.WithFields(log.Fields{"prefix": net}).
 		Info("Using static IPv6 prefix")
-	return NetConf{prefix: *net}, nil
+	return NetConf{mode: Bridge, prefix: *net}, nil
 }

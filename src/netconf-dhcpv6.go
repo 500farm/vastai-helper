@@ -14,7 +14,7 @@ type DhcpKeeper struct {
 	ctx     context.Context
 }
 
-func startDhcp(ctx context.Context, ifname string) (NetConf, error) {
+func bridgeNetConfFromDhcp(ctx context.Context, ifname string) (NetConf, error) {
 	keeper := DhcpKeeper{
 		ifname: ifname,
 		ctx:    ctx,

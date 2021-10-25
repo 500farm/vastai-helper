@@ -16,22 +16,28 @@ import (
 )
 
 type DockerNet struct {
-	id      string
-	name    string
-	driver  string
-	prefix  net.IPNet
-	gateway net.IP
+	id        string
+	name      string
+	driver    string
+	v6prefix  net.IPNet
+	v6gateway net.IP
+	v4prefix  net.IPNet
+	v4gateway net.IP
 }
 
-func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, driver string, netConf *NetConf) (DockerNet, error) {
+func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
+	driver := "bridge"
+	if netConf.mode == Ipvlan {
+		driver = "ipvlan"
+	}
+
 	dockerNets, err := enumDockerNets(ctx, cli, driver)
 	if err != nil {
 		return DockerNet{}, err
 	}
 
 	for _, dockerNet := range dockerNets {
-		if dockerNet.prefix.String() == netConf.prefix.String() &&
-			dockerNet.prefix.Contains(dockerNet.gateway) {
+		if isNetSuitable(dockerNet, netConf) {
 			log.WithFields(dockerNet.logFields()).Info("Using network")
 			return dockerNet, nil
 		}
@@ -57,18 +63,21 @@ func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]D
 				driver: netJson.Driver,
 			}
 			for _, ipamJson := range netJson.IPAM.Config {
-				if strings.Contains(ipamJson.Subnet, ":") &&
-					strings.Contains(ipamJson.Gateway, ":") {
+				if ipamJson.Subnet != "" && ipamJson.Gateway != "" {
 					_, cidr, err := net.ParseCIDR(ipamJson.Subnet)
 					if err == nil {
-						dockerNet.prefix = *cidr
-						dockerNet.gateway = net.ParseIP(ipamJson.Gateway)
-						log.WithFields(dockerNet.logFields()).Info("Found network")
-						result = append(result, dockerNet)
-						break
+						if strings.Contains(ipamJson.Subnet, ":") {
+							dockerNet.v6prefix = *cidr
+							dockerNet.v6gateway = net.ParseIP(ipamJson.Gateway)
+						} else {
+							dockerNet.v4prefix = *cidr
+							dockerNet.v4gateway = net.ParseIP(ipamJson.Gateway)
+						}
 					}
 				}
 			}
+			log.WithFields(dockerNet.logFields()).Info("Found network")
+			result = append(result, dockerNet)
 		}
 	}
 
@@ -78,26 +87,31 @@ func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]D
 	return result, nil
 }
 
+func isNetSuitable(net DockerNet, netConf *NetConf) bool {
+	return net.v6prefix.String() == netConf.prefix.String() &&
+		net.v6prefix.Contains(net.v6gateway)
+}
+
 func createDockerNet(ctx context.Context, cli *client.Client, driver string, netConf *NetConf) (DockerNet, error) {
 	log.Infof("Will create new %s network", driver)
 
-	name := "vastai-ipv6-net"
+	name := "vastai-net"
 	i := 0
 	for netExists(ctx, cli, name) {
 		i++
-		name = "vastai-ipv6-net" + strconv.Itoa(i)
+		name = "vastai-net" + strconv.Itoa(i)
 	}
 
 	dockerNet := DockerNet{
-		id:      "",
-		name:    name,
-		prefix:  netConf.prefix,
-		gateway: gwAddress(netConf.prefix),
+		id:        "",
+		name:      name,
+		v6prefix:  netConf.prefix,
+		v6gateway: gwAddress(netConf.prefix),
 	}
 
 	options := make(map[string]string)
 	if driver == "ipvlan" {
-		options["ipvlan_mode"] = "l3"
+		options["ipvlan_mode"] = "l2"
 	}
 
 	resp, err := cli.NetworkCreate(ctx, dockerNet.name, types.NetworkCreate{
@@ -107,8 +121,8 @@ func createDockerNet(ctx context.Context, cli *client.Client, driver string, net
 		IPAM: &network.IPAM{
 			Driver: "default",
 			Config: []network.IPAMConfig{{
-				Subnet:  dockerNet.prefix.String(),
-				Gateway: dockerNet.gateway.String(),
+				Subnet:  dockerNet.v6prefix.String(),
+				Gateway: dockerNet.v6gateway.String(),
 			}},
 		},
 		Attachable: true,
@@ -141,10 +155,12 @@ func (net *DockerNet) logFields() log.Fields {
 		id = id[0:12]
 	}
 	return log.Fields{
-		"id":     id,
-		"name":   net.name,
-		"driver": net.driver,
-		"prefix": net.prefix.String(),
-		"gw":     net.gateway.String(),
+		"id":       id,
+		"name":     net.name,
+		"driver":   net.driver,
+		"v6prefix": net.v6prefix.String(),
+		"v6gw":     net.v6gateway.String(),
+		"v4prefix": net.v4prefix.String(),
+		"v4gw":     net.v4gateway.String(),
 	}
 }

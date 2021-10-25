@@ -76,6 +76,7 @@ func netConfFromReply(reply dhcpv6.DHCPv6) (NetConf, error) {
 			continue
 		}
 		conf := NetConf{
+			mode: Bridge,
 			prefix: net.IPNet{
 				IP:   p.Prefix.IP,
 				Mask: p.Prefix.Mask,

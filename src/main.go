@@ -11,22 +11,25 @@ import (
 )
 
 var (
+	// network attach functionality
 	dhcpInterface = kingpin.Flag(
 		"dhcp-interface",
-		"Interface where to listen for DHCPv6 PD.",
+		"(For bridge network) Interface where to listen for DHCPv6 PD.",
 	).String()
 	staticPrefix = kingpin.Flag(
 		"static-prefix",
-		"Static IPv6 prefix for address assignment (length from /48 to /96).",
+		"(For bridge network) Static IPv6 prefix for address assignment (length from /48 to /96).",
 	).String()
-	ipvlan = kingpin.Flag(
-		"ipvlan",
-		"Use ipvlan network instead of bridge",
-	).Bool()
+	ipvlanInterface = kingpin.Flag(
+		"ipvlan-interface",
+		"(For ipvlan network) VLAN interface for the network.",
+	).String()
 	test = kingpin.Flag(
 		"test",
 		"Perform a self-test of network attach functionality of the running daemon.",
 	).Bool()
+
+	// auto-prune functionality
 	expireTime = kingpin.Flag(
 		"expire-time",
 		"Expire time for stopped containers (non-VastAi), temporary images, build cache.",
@@ -63,32 +66,42 @@ func main() {
 		return
 	}
 
-	if *dhcpInterface != "" && *staticPrefix != "" {
-		log.Fatal("Please specify either --dhcp-interface or --static-prefix, not both")
+	var netHelper NetHelperMode = None
+	if *dhcpInterface != "" || *staticPrefix != "" {
+		if *dhcpInterface != "" && *staticPrefix != "" {
+			log.Fatal("Please use either --dhcp-interface or --static-prefix, not both")
+		}
+		netHelper = Bridge
+	}
+	if *ipvlanInterface != "" {
+		if netHelper != None {
+			log.Fatal("Please use args either for bridge mode or for ipvlan, not both")
+		}
+		netHelper = Ipvlan
 	}
 
 	os.MkdirAll(pruneStateDir(), 0700)
 	go dockerPruneLoop(ctx, cli)
 
-	useNetHelper := *dhcpInterface != "" || *staticPrefix != ""
-
-	if useNetHelper {
+	if netHelper != None {
 		var netConf NetConf
 		var err error
-		if *dhcpInterface != "" {
-			netConf, err = startDhcp(ctx, *dhcpInterface)
-		} else {
-			netConf, err = staticNetConf(*staticPrefix)
+
+		if netHelper == Bridge {
+			if *dhcpInterface != "" {
+				netConf, err = bridgeNetConfFromDhcp(ctx, *dhcpInterface)
+			} else {
+				netConf, err = staticBridgeNetConf(*staticPrefix)
+			}
+		}
+		if netHelper == Ipvlan {
+			netConf, err = ipvlanNetConf(ctx, *ipvlanInterface)
 		}
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		driver := "bridge"
-		if *ipvlan {
-			driver = "ipvlan"
-		}
-		dockerNet, err := selectOrCreateDockerNet(ctx, cli, driver, &netConf)
+		dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)
 		if err != nil {
 			log.Fatal(err)
 		}
