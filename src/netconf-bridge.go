@@ -3,10 +3,28 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 )
+
+func staticBridgeNetConf(prefix string) (NetConf, error) {
+	_, net, err := net.ParseCIDR(prefix)
+	if err != nil {
+		return NetConf{}, err
+	}
+	len, total := net.Mask.Size()
+	if total != 128 {
+		return NetConf{}, errors.New("Please specify an IPv6 prefix")
+	}
+	if len < 48 || len > 96 {
+		return NetConf{}, errors.New("Please specify an IPv6 prefix between /48 and /96 in length")
+	}
+	log.WithFields(log.Fields{"prefix": net}).
+		Info("Using static IPv6 prefix")
+	return NetConf{mode: Bridge, prefix: *net}, nil
+}
 
 type DhcpKeeper struct {
 	ifname  string
