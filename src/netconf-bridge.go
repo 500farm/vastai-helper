@@ -52,7 +52,7 @@ func bridgeNetConfFromDhcp(ctx context.Context, ifname string) (NetConf, error) 
 }
 
 func (c *DhcpKeeper) renew() error {
-	netConf, err := receiveConfWithDhcp(c.ctx, c.ifname)
+	netConf, err := receiveConfWithDhcpV6(c.ctx, c.ifname)
 	if err != nil {
 		return err
 	}

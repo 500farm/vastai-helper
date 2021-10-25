@@ -12,7 +12,7 @@ import (
 	"github.com/insomniacslk/dhcp/iana"
 )
 
-func receiveConfWithDhcp(ctx context.Context, ifname string) (NetConf, error) {
+func receiveConfWithDhcpV6(ctx context.Context, ifname string) (NetConf, error) {
 	// TODO does non-rapid solicit work in insomniacslk/dhcp/dhcpv6 library?
 
 	iface, err := net.InterfaceByName(ifname)
@@ -30,14 +30,14 @@ func receiveConfWithDhcp(ctx context.Context, ifname string) (NetConf, error) {
 		return NetConf{}, err
 	}
 	defer client.Close()
-	reply, err := client.RapidSolicit(ctx, getModifiers(iface)...)
+	reply, err := client.RapidSolicit(ctx, getModifiersV6(iface)...)
 	if err != nil {
 		return NetConf{}, err
 	}
-	return netConfFromReply(reply)
+	return netConfFromReplyV6(reply)
 }
 
-func getModifiers(iface *net.Interface) []dhcpv6.Modifier {
+func getModifiersV6(iface *net.Interface) []dhcpv6.Modifier {
 	return []dhcpv6.Modifier{
 		dhcpv6.WithClientID(generateDuid(iface)),
 		dhcpv6.WithIAPD(generateIaid()),
@@ -56,7 +56,7 @@ func generateIaid() [4]byte {
 	return [4]byte{76, 61, 73, 74}
 }
 
-func netConfFromReply(reply dhcpv6.DHCPv6) (NetConf, error) {
+func netConfFromReplyV6(reply dhcpv6.DHCPv6) (NetConf, error) {
 	d, err := reply.GetInnerMessage()
 	if err != nil {
 		return NetConf{}, err
