@@ -41,6 +41,7 @@ func dhcpLeaseV4(ctx context.Context, ifname string, clientId []byte, hostName s
 	}
 
 	lease := newLease(ifname, clientId, hostName, reply)
+	log.WithFields(lease.logFields()).Info("Received DHCP lease")
 	if lease.Gateway() == nil {
 		return DhcpLeaseV4{}, errors.New("No gateways in DHCPv4 lease")
 	}
@@ -89,7 +90,6 @@ func selfTestDhcpV4(ctx context.Context, ifname string) error {
 	if err != nil {
 		return err
 	}
-	log.WithFields(lease.logFields()).Info("Received DHCP lease")
 
 	j, err := ioutil.ReadFile(leaseStateFile(clientId))
 	if err != nil {
@@ -103,7 +103,6 @@ func selfTestDhcpV4(ctx context.Context, ifname string) error {
 	if err != nil {
 		return err
 	}
-	log.WithFields(lease.logFields()).Info("Received DHCP lease")
 
 	log.Info("Waiting 5 seconds before release")
 	time.Sleep(5 * time.Second)

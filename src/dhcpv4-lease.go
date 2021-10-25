@@ -136,6 +136,10 @@ func (lease DhcpLeaseV4) release(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	log.WithFields(log.Fields{
+		"ip":       lease.Ip(),
+		"clientid": hex.EncodeToString(lease.ClientId),
+	}).Info("Released DHCP lease")
 
 	os.Remove(leaseStateFile(lease.ClientId))
 	return nil

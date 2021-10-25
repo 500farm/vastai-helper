@@ -44,7 +44,6 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachme
 		conf := lease.toNetConf()
 		att.ipv4 = conf.v4.prefix.IP
 		ipv4str = att.ipv4.String()
-		log.WithFields(lease.logFields()).Info("Received DHCP lease")
 	}
 
 	// attach
@@ -70,8 +69,6 @@ func detachContainerFromNet(ctx context.Context, cli *client.Client, att *Attach
 		if err != nil {
 			return err
 		}
-		log.WithFields(log.Fields{"v4.ip": att.ipv4.String()}).
-			Info("Released DHCP lease")
 	}
 	return nil
 }
