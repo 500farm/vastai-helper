@@ -23,7 +23,13 @@ func staticBridgeNetConf(prefix string) (NetConf, error) {
 	}
 	log.WithFields(log.Fields{"prefix": net}).
 		Info("Using static IPv6 prefix")
-	return NetConf{mode: Bridge, prefix: *net}, nil
+	return NetConf{
+		mode: Bridge,
+		v6: NetConfPrefix{
+			prefix:  *net,
+			gateway: gwAddress(*net),
+		},
+	}, nil
 }
 
 type DhcpKeeper struct {
@@ -52,7 +58,7 @@ func (c *DhcpKeeper) renew() error {
 	}
 	log.WithFields(netConf.logFields()).Info("Received network configuration")
 
-	len, _ := netConf.prefix.Mask.Size()
+	len, _ := netConf.v6.prefix.Mask.Size()
 	if len < 48 || len > 96 {
 		return errors.New("Delegated prefix must be between /48 and /96 in length")
 	}
@@ -64,7 +70,7 @@ func (c *DhcpKeeper) renew() error {
 func (c *DhcpKeeper) renewLoop() {
 	// TODO what to do if the prefix changes or expires?
 	for {
-		time.Sleep(c.netConf.preferredLifetime)
+		time.Sleep(c.netConf.v6.preferredLifetime)
 		for {
 			err := c.renew()
 			if err == nil {

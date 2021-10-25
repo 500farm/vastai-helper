@@ -75,14 +75,18 @@ func netConfFromReply(reply dhcpv6.DHCPv6) (NetConf, error) {
 		if p.Prefix == nil {
 			continue
 		}
+		prefix := net.IPNet{
+			IP:   p.Prefix.IP,
+			Mask: p.Prefix.Mask,
+		}
 		conf := NetConf{
 			mode: Bridge,
-			prefix: net.IPNet{
-				IP:   p.Prefix.IP,
-				Mask: p.Prefix.Mask,
+			v6: NetConfPrefix{
+				prefix:            prefix,
+				gateway:           gwAddress(prefix),
+				preferredLifetime: p.PreferredLifetime,
+				validLifetime:     p.ValidLifetime,
 			},
-			preferredLifetime: p.PreferredLifetime,
-			validLifetime:     p.ValidLifetime,
 		}
 		// add DNS configuration
 		dns := d.Options.DNS()

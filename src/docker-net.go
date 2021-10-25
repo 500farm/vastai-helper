@@ -8,7 +8,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/apparentlymart/go-cidr/cidr"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
@@ -88,7 +87,7 @@ func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]D
 }
 
 func isNetSuitable(net DockerNet, netConf *NetConf) bool {
-	return net.v6prefix.String() == netConf.prefix.String() &&
+	return net.v6prefix.String() == netConf.v6.prefix.String() &&
 		net.v6prefix.Contains(net.v6gateway)
 }
 
@@ -105,13 +104,29 @@ func createDockerNet(ctx context.Context, cli *client.Client, driver string, net
 	dockerNet := DockerNet{
 		id:        "",
 		name:      name,
-		v6prefix:  netConf.prefix,
-		v6gateway: gwAddress(netConf.prefix),
+		v6prefix:  netConf.v6.prefix,
+		v6gateway: netConf.v6.gateway,
+		v4prefix:  netConf.v4.prefix,
+		v4gateway: netConf.v4.gateway,
 	}
 
 	options := make(map[string]string)
 	if driver == "ipvlan" {
 		options["ipvlan_mode"] = "l2"
+	}
+
+	ipamConfigs := []network.IPAMConfig{}
+	if dockerNet.v6prefix.IP != nil {
+		ipamConfigs = append(ipamConfigs, network.IPAMConfig{
+			Subnet:  dockerNet.v6prefix.String(),
+			Gateway: dockerNet.v6gateway.String(),
+		})
+	}
+	if dockerNet.v4prefix.IP != nil {
+		ipamConfigs = append(ipamConfigs, network.IPAMConfig{
+			Subnet:  dockerNet.v4prefix.String(),
+			Gateway: dockerNet.v4gateway.String(),
+		})
 	}
 
 	resp, err := cli.NetworkCreate(ctx, dockerNet.name, types.NetworkCreate{
@@ -120,10 +135,7 @@ func createDockerNet(ctx context.Context, cli *client.Client, driver string, net
 		EnableIPv6:     true,
 		IPAM: &network.IPAM{
 			Driver: "default",
-			Config: []network.IPAMConfig{{
-				Subnet:  dockerNet.v6prefix.String(),
-				Gateway: dockerNet.v6gateway.String(),
-			}},
+			Config: ipamConfigs,
 		},
 		Attachable: true,
 		Options:    options,
@@ -135,11 +147,6 @@ func createDockerNet(ctx context.Context, cli *client.Client, driver string, net
 	dockerNet.id = resp.ID
 	log.WithFields(dockerNet.logFields()).Info("Network created")
 	return dockerNet, nil
-}
-
-func gwAddress(prefix net.IPNet) net.IP {
-	result, _ := cidr.Host(&prefix, 1)
-	return result
 }
 
 func netExists(ctx context.Context, cli *client.Client, name string) bool {
@@ -155,12 +162,12 @@ func (net *DockerNet) logFields() log.Fields {
 		id = id[0:12]
 	}
 	return log.Fields{
-		"id":       id,
-		"name":     net.name,
-		"driver":   net.driver,
-		"v6prefix": net.v6prefix.String(),
-		"v6gw":     net.v6gateway.String(),
-		"v4prefix": net.v4prefix.String(),
-		"v4gw":     net.v4gateway.String(),
+		"id":        id,
+		"name":      net.name,
+		"driver":    net.driver,
+		"v6.prefix": net.v6prefix.String(),
+		"v6.gw":     net.v6gateway.String(),
+		"v4.prefix": net.v4prefix.String(),
+		"v4.gw":     net.v4gateway.String(),
 	}
 }
