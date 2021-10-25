@@ -229,6 +229,9 @@ func updateImageChainExpireTime(ctx context.Context, cli *client.Client, id stri
 	if err != nil {
 		return err
 	}
+	if len(chain) == 0 {
+		return nil
+	}
 	images := []string{}
 	tags := []string{}
 	for _, item := range chain {
