@@ -87,8 +87,17 @@ func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]D
 }
 
 func isNetSuitable(net DockerNet, netConf *NetConf) bool {
+	if netConf.mode == Bridge {
+		return net.v6prefix.String() == netConf.v6.prefix.String() &&
+			net.v6prefix.Contains(net.v6gateway)
+	}
+
+	// for mode=ipvlan
+	// TODO also test parent-interface?
 	return net.v6prefix.String() == netConf.v6.prefix.String() &&
-		net.v6prefix.Contains(net.v6gateway)
+		net.v6gateway.Equal(netConf.v6.gateway) &&
+		net.v4prefix.String() == netConf.v4.prefix.String() &&
+		net.v4gateway.Equal(netConf.v4.gateway)
 }
 
 func createDockerNet(ctx context.Context, cli *client.Client, driver string, netConf *NetConf) (DockerNet, error) {
