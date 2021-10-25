@@ -77,16 +77,23 @@ func enumDockerNets(ctx context.Context, cli *client.Client) ([]DockerNet, error
 func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
 	log.Info("Will create new network")
 
+	name := "vastai-ipv6-net"
+	i := 0
+	for netExists(ctx, cli, name) {
+		i++
+		name = "vastai-ipv6-net" + strconv.Itoa(i)
+	}
+
 	dockerNet := DockerNet{
 		id:      "",
-		name:    "vastai-ipv6-net", // FIXME duplicate detection
+		name:    name,
 		prefix:  netConf.prefix,
 		gateway: gwAddress(netConf.prefix),
 	}
 
 	resp, err := cli.NetworkCreate(ctx, dockerNet.name, types.NetworkCreate{
-		Driver:     "bridge",
-		EnableIPv6: true,
+		CheckDuplicate: true,
+		EnableIPv6:     true,
 		IPAM: &network.IPAM{
 			Driver: "default",
 			Config: []network.IPAMConfig{{
@@ -108,6 +115,13 @@ func createDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) 
 func gwAddress(prefix net.IPNet) net.IP {
 	result, _ := cidr.Host(&prefix, 1)
 	return result
+}
+
+func netExists(ctx context.Context, cli *client.Client, name string) bool {
+	networks, err := cli.NetworkList(ctx, types.NetworkListOptions{
+		Filters: filters.NewArgs(filters.Arg("name", name)),
+	})
+	return err == nil && len(networks) > 0
 }
 
 func (net *DockerNet) logFields() log.Fields {
