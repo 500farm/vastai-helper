@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"io/ioutil"
 	"net"
 	"time"
 
@@ -20,7 +19,7 @@ func dhcpLeaseV4(ctx context.Context, ifname string, clientId []byte, hostName s
 		return DhcpLeaseV4{}, err
 	}
 	log.WithFields(log.Fields{"ifname": iface.Name, "clientid": hex.EncodeToString(clientId)}).
-		Info("DHCPv4 IP request")
+		Info("DHCPv4 request")
 
 	opts := []nclient4.ClientOpt{}
 	if *debug {
@@ -84,37 +83,6 @@ func dhcpRenewAllV4(ctx context.Context) error {
 				Errorf("Gateway changed in DHCP lease (was %s)", lease.Gateway())
 		}
 	}
-	return nil
-}
-
-func selfTestDhcpV4(ctx context.Context, ifname string) error {
-	clientId := []byte("test-client-id")
-
-	lease, err := dhcpLeaseV4(ctx, ifname, clientId, "test-host-name", nil)
-	if err != nil {
-		return err
-	}
-
-	j, err := ioutil.ReadFile(leaseStateFile(clientId))
-	if err != nil {
-		return err
-	}
-	log.Info("State file contents: " + string(j))
-
-	log.Info("Waiting 5 seconds before renew")
-	time.Sleep(5 * time.Second)
-	lease, err = lease.renew(ctx)
-	if err != nil {
-		return err
-	}
-
-	log.Info("Waiting 5 seconds before release")
-	time.Sleep(5 * time.Second)
-	err = lease.release(ctx)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

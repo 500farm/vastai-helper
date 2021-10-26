@@ -97,22 +97,27 @@ func main() {
 	go dockerPruneLoop(ctx, cli)
 
 	if netType != None {
-		var netConf NetConf
+		var netConfV6, netConfV4 NetConf
 		var err error
 
-		if netType == Bridge {
-			if *staticIpv6Prefix == "" {
-				netConf, err = bridgeNetConfFromDhcp(ctx, *netInterface)
-			} else {
-				netConf, err = staticBridgeNetConf(*staticIpv6Prefix)
-			}
-		}
-		if netType == Ipvlan {
-			netConf, err = ipvlanNetConf(ctx, *netInterface)
+		if *staticIpv6Prefix != "" {
+			netConfV6, err = staticNetConfV6(*staticIpv6Prefix)
+		} else {
+			netConfV6, err = dhcpNetConfV6(ctx, *netInterface, netType == Ipvlan)
 		}
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		if netType == Ipvlan {
+			netConfV4, err = dhcpNetConfV4(ctx, *netInterface)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		netConf := mergeNetConf(netConfV4, netConfV6, netType)
+		log.WithFields(netConf.logFields()).Info("Detected network configuration")
 
 		dockerNet, err := selectOrCreateDockerNet(ctx, cli, &netConf)
 		if err != nil {

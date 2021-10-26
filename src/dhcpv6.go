@@ -12,7 +12,7 @@ import (
 	"github.com/insomniacslk/dhcp/iana"
 )
 
-func receiveConfWithDhcpV6(ctx context.Context, ifname string) (NetConf, error) {
+func receiveConfWithDhcpV6(ctx context.Context, ifname string, sharedPrefix bool) (NetConf, error) {
 	// TODO does non-rapid solicit work in insomniacslk/dhcp/dhcpv6 library?
 
 	iface, err := net.InterfaceByName(ifname)
@@ -34,16 +34,22 @@ func receiveConfWithDhcpV6(ctx context.Context, ifname string) (NetConf, error) 
 		return NetConf{}, err
 	}
 	defer client.Close()
-	reply, err := client.RapidSolicit(ctx, getModifiersV6(iface)...)
+	reply, err := client.RapidSolicit(ctx, getModifiersV6(iface, sharedPrefix)...)
 	if err != nil {
 		return NetConf{}, err
 	}
 	return netConfFromReplyV6(reply, ifname)
 }
 
-func getModifiersV6(iface *net.Interface) []dhcpv6.Modifier {
+func getModifiersV6(iface *net.Interface, sharedPrefix bool) []dhcpv6.Modifier {
+	var duid dhcpv6.Duid
+	if sharedPrefix {
+		duid = generateSharedDuid()
+	} else {
+		duid = generateDuid(iface)
+	}
 	return []dhcpv6.Modifier{
-		dhcpv6.WithClientID(generateDuid(iface)),
+		dhcpv6.WithClientID(duid),
 		dhcpv6.WithIAPD(generateIaid()),
 	}
 }
@@ -53,6 +59,13 @@ func generateDuid(iface *net.Interface) dhcpv6.Duid {
 		Type:          dhcpv6.DUID_LL,
 		HwType:        iana.HWTypeEthernet,
 		LinkLayerAddr: iface.HardwareAddr,
+	}
+}
+
+func generateSharedDuid() dhcpv6.Duid {
+	return dhcpv6.Duid{
+		Type: dhcpv6.DUID_UUID,
+		Uuid: []byte{76, 61, 73, 74, 76, 61, 73, 74, 76, 61, 73, 74, 76, 61, 73, 74},
 	}
 }
 
@@ -84,7 +97,6 @@ func netConfFromReplyV6(reply dhcpv6.DHCPv6, ifname string) (NetConf, error) {
 			Mask: p.Prefix.Mask,
 		}
 		conf := NetConf{
-			netType: Bridge,
 			v6: NetConfPrefix{
 				prefix:            prefix,
 				gateway:           gwAddress(prefix),

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net"
 	"time"
 
@@ -70,4 +71,40 @@ func (conf NetConf) logFields() log.Fields {
 		"dns":    conf.dnsServers,
 		"search": conf.dnsSearchList,
 	}
+}
+
+func mergeNetConf(conf4 NetConf, conf6 NetConf, netType NetType) NetConf {
+	result := conf4
+	result.netType = netType
+	result.v6 = conf6.v6
+	if result.ifname == "" {
+		result.ifname = conf6.ifname
+	}
+	result.dnsServers = append(append([]net.IP{}, conf6.dnsServers...), conf4.dnsServers...)
+	if len(result.dnsSearchList) == 0 {
+		result.dnsSearchList = conf6.dnsSearchList
+	}
+	return result
+}
+
+func staticNetConfV6(prefix string) (NetConf, error) {
+	_, net, err := net.ParseCIDR(prefix)
+	if err != nil {
+		return NetConf{}, err
+	}
+	len, total := net.Mask.Size()
+	if total != 128 {
+		return NetConf{}, errors.New("Please specify an IPv6 prefix")
+	}
+	if len < 48 || len > 96 {
+		return NetConf{}, errors.New("Please specify an IPv6 prefix between /48 and /96 in length")
+	}
+	log.WithFields(log.Fields{"prefix": net}).
+		Info("Using static IPv6 prefix")
+	return NetConf{
+		v6: NetConfPrefix{
+			prefix:  *net,
+			gateway: gwAddress(*net),
+		},
+	}, nil
 }
