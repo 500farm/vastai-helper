@@ -12,27 +12,23 @@ import (
 
 var (
 	// network attach functionality
-	dhcpInterface = kingpin.Flag(
-		"dhcp-interface",
-		"(For bridge network) Interface where to listen for DHCPv6 PD.",
+	netTypeArg = kingpin.Flag(
+		"net-type",
+		"Network type: 'bridge' or 'ipvlan'.",
 	).String()
-	staticPrefix = kingpin.Flag(
-		"static-prefix",
-		"(For bridge network) Static IPv6 prefix for address assignment (length from /48 to /96).",
+	netInterface = kingpin.Flag(
+		"net-interface",
+		"Network interface for DHCPv4 and DHCPv6-PD queries.",
 	).String()
-	ipvlanInterface = kingpin.Flag(
-		"ipvlan-interface",
-		"(For ipvlan network) VLAN interface for the network.",
+	staticIpv6Prefix = kingpin.Flag(
+		"static-ipv6-prefix",
+		"Static IPv6 prefix for address assignment (length from /48 to /96).",
 	).String()
 
 	// testing
 	test = kingpin.Flag(
 		"test",
 		"Perform a self-test of network attach functionality of the running daemon.",
-	).Bool()
-	testDhcpV4 = kingpin.Flag(
-		"test-dhcpv4",
-		"Perform a self-test of DHCPv4 lease/release (requires --ipvlan-interface).",
 	).Bool()
 
 	// auto-prune functionality
@@ -72,47 +68,43 @@ func main() {
 		return
 	}
 
-	var netHelper NetHelperMode = None
-	if *dhcpInterface != "" || *staticPrefix != "" {
-		if *dhcpInterface != "" && *staticPrefix != "" {
-			log.Fatal("Please use either --dhcp-interface or --static-prefix, not both")
-		}
-		netHelper = Bridge
+	var netType NetType
+	switch *netTypeArg {
+	case "":
+		netType = None
+	case "bridge":
+		netType = Bridge
+	case "ipvlan":
+		netType = Ipvlan
+	default:
+		log.Fatalf(`Invalid --net-type="%s".`, netTypeArg)
 	}
 
-	if *ipvlanInterface != "" {
-		if netHelper != None {
-			log.Fatal("Please use args either for bridge mode or for ipvlan, not both")
-		}
-		netHelper = Ipvlan
+	if netType != None && *netInterface == "" {
+		log.Fatal("For network functionality --net-interface is required.")
+	}
 
+	if netType == Ipvlan {
 		os.MkdirAll(leaseStateDir(), 0700)
-		if *testDhcpV4 {
-			if err := selfTestDhcpV4(ctx, *ipvlanInterface); err != nil {
-				log.Fatal(err)
-			}
-			return
-		}
-
 		go dhcpRenewLoopV4(ctx)
 	}
 
 	os.MkdirAll(pruneStateDir(), 0700)
 	go dockerPruneLoop(ctx, cli)
 
-	if netHelper != None {
+	if netType != None {
 		var netConf NetConf
 		var err error
 
-		if netHelper == Bridge {
-			if *dhcpInterface != "" {
-				netConf, err = bridgeNetConfFromDhcp(ctx, *dhcpInterface)
+		if netType == Bridge {
+			if *staticIpv6Prefix == "" {
+				netConf, err = bridgeNetConfFromDhcp(ctx, *netInterface)
 			} else {
-				netConf, err = staticBridgeNetConf(*staticPrefix)
+				netConf, err = staticBridgeNetConf(*staticIpv6Prefix)
 			}
 		}
-		if netHelper == Ipvlan {
-			netConf, err = ipvlanNetConf(ctx, *ipvlanInterface)
+		if netType == Ipvlan {
+			netConf, err = ipvlanNetConf(ctx, *netInterface)
 		}
 		if err != nil {
 			log.Fatal(err)

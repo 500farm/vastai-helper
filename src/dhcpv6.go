@@ -80,7 +80,7 @@ func netConfFromReplyV6(reply dhcpv6.DHCPv6, ifname string) (NetConf, error) {
 			Mask: p.Prefix.Mask,
 		}
 		conf := NetConf{
-			mode: Bridge,
+			netType: Bridge,
 			v6: NetConfPrefix{
 				prefix:            prefix,
 				gateway:           gwAddress(prefix),

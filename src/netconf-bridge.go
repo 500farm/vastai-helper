@@ -24,7 +24,7 @@ func staticBridgeNetConf(prefix string) (NetConf, error) {
 	log.WithFields(log.Fields{"prefix": net}).
 		Info("Using static IPv6 prefix")
 	return NetConf{
-		mode: Bridge,
+		netType: Bridge,
 		v6: NetConfPrefix{
 			prefix:  *net,
 			gateway: gwAddress(*net),

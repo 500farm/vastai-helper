@@ -18,14 +18,14 @@ type NetConf struct {
 	v4, v6        NetConfPrefix
 	dnsServers    []net.IP
 	dnsSearchList []string
-	mode          NetHelperMode
+	netType       NetType
 	ifname        string
 }
 
-type NetHelperMode int
+type NetType int
 
 const (
-	None NetHelperMode = iota
+	None NetType = iota
 	Bridge
 	Ipvlan
 )
@@ -54,7 +54,7 @@ func (p NetConfPrefix) logFields() log.Fields {
 
 func (conf NetConf) logFields() log.Fields {
 	return log.Fields{
-		"mode":   conf.mode,
+		"type":   conf.netType,
 		"ifname": conf.ifname,
 
 		"v6.prefix":  conf.v6.prefix.String(),

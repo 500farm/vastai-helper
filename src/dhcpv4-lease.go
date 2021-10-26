@@ -94,7 +94,7 @@ func (lease DhcpLeaseV4) Gateway() net.IP {
 func (lease DhcpLeaseV4) toNetConf() NetConf {
 	ack := lease.ClientData.ACK
 	conf := NetConf{
-		mode: None,
+		netType: None,
 		v4: NetConfPrefix{
 			prefix: net.IPNet{
 				IP:   lease.Ip(),

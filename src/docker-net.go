@@ -27,7 +27,7 @@ type DockerNet struct {
 
 func selectOrCreateDockerNet(ctx context.Context, cli *client.Client, netConf *NetConf) (DockerNet, error) {
 	driver := "bridge"
-	if netConf.mode == Ipvlan {
+	if netConf.netType == Ipvlan {
 		driver = "ipvlan"
 	}
 
@@ -89,7 +89,7 @@ func enumDockerNets(ctx context.Context, cli *client.Client, driver string) ([]D
 }
 
 func isNetSuitable(net DockerNet, netConf *NetConf) bool {
-	if netConf.mode == Bridge {
+	if netConf.netType == Bridge {
 		return net.v6prefix.String() == netConf.v6.prefix.String() &&
 			net.v6prefix.Contains(net.v6gateway)
 	}
