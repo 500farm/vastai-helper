@@ -20,8 +20,8 @@ var (
 		"net-interface",
 		"Network interface for DHCPv4 and DHCPv6-PD queries.",
 	).String()
-	staticIpv6Prefix = kingpin.Flag(
-		"static-ipv6-prefix",
+	ipv6Prefix = kingpin.Flag(
+		"ipv6-prefix",
 		"Static IPv6 prefix for address assignment (length from /48 to /96).",
 	).String()
 
@@ -100,8 +100,8 @@ func main() {
 		var netConfV6, netConfV4 NetConf
 		var err error
 
-		if *staticIpv6Prefix != "" {
-			netConfV6, err = staticNetConfV6(*staticIpv6Prefix)
+		if *ipv6Prefix != "" {
+			netConfV6, err = staticNetConfV6(*ipv6Prefix)
 		} else {
 			netConfV6, err = dhcpNetConfV6(ctx, *netInterface, netType == Ipvlan)
 		}
