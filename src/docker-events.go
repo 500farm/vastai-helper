@@ -128,41 +128,50 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 }
 
 func processEventWithNet(ctx context.Context, cli *client.Client, event *events.Message, net *DockerNet) error {
-	if event.Type == "container" {
-		cid := event.Actor.ID
-		if cid == "" {
-			return nil
+	if event.Type != "container" {
+		return nil
+	}
+	cid := event.Actor.ID
+	if cid == "" {
+		return nil
+	}
+	cname := event.Actor.Attributes["name"]
+	image := event.Actor.Attributes["image"]
+	if strings.HasPrefix(image, "sha256:") {
+		// ignore temporary containers
+		return nil
+	}
+	if !shouldExposeContainer(cname, image) {
+		return nil
+	}
+	att := Attachment{
+		cid:   cid,
+		cname: cname,
+		net:   net,
+	}
+	if event.Action == "create" {
+		return attachContainerToNet(ctx, cli, &att)
+	}
+	if event.Action == "destroy" {
+		return detachContainerFromNet(ctx, cli, &att)
+	}
+	if event.Action == "start" {
+		if net.driver == "bridge" {
+			return routePorts(ctx, cli, &att)
 		}
-		cname := event.Actor.Attributes["name"]
-		image := event.Actor.Attributes["image"]
-		if strings.HasPrefix(image, "sha256:") {
-			// ignore temporary containers
-			return nil
+		return nil
+	}
+	if event.Action == "die" {
+		if net.driver == "bridge" {
+			return unroutePorts(ctx, cli, &att)
 		}
-		att := Attachment{
-			cid:   cid,
-			cname: cname,
-			net:   net,
-		}
-		if event.Action == "create" {
-			return attachContainerToNet(ctx, cli, &att)
-		}
-		if event.Action == "destroy" {
-			return detachContainerFromNet(ctx, cli, &att)
-		}
-		if event.Action == "start" {
-			if net.driver == "bridge" {
-				return routePorts(ctx, cli, &att)
-			}
-			return nil
-		}
-		if event.Action == "die" {
-			if net.driver == "bridge" {
-				return unroutePorts(ctx, cli, &att)
-			}
-			return nil
-		}
+		return nil
 	}
 
 	return nil
+}
+
+func shouldExposeContainer(cname string, image string) bool {
+	// temporarily exclude vast.ai containers
+	return !strings.HasPrefix(cname, "C.")
 }
