@@ -48,6 +48,11 @@ func ipvlanNetConf(ctx context.Context, ifname string) (NetConf, error) {
 	if !netConf.hasV4() || !netConf.hasV6() {
 		return NetConf{}, errors.New("Ipvlan interface must be configured for both IPv4 and IPv6")
 	}
+	len, _ := netConf.v6.prefix.Mask.Size()
+	if len < 48 || len > 96 {
+		return NetConf{}, errors.New("IPv6 prefix must be between /48 and /96 in length")
+	}
+
 	return netConf, nil
 }
 
