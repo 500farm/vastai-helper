@@ -93,8 +93,8 @@ func main() {
 	}
 
 	if netType == Ipvlan {
-		if *ipv6Prefix == "" || *ipv6Gateway == "" {
-			log.Fatal("Ipvlan network requires --ipv6-prefix and --ipv6-gateway")
+		if *ipv6Prefix == "" {
+			log.Fatal("Ipvlan network requires --ipv6-prefix")
 		}
 		os.MkdirAll(leaseStateDir(), 0700)
 	}
