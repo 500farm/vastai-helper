@@ -25,7 +25,11 @@ func receiveConfWithDhcpV6(ctx context.Context, ifname string) (NetConf, error) 
 	// fix for "sendto: no route to host"
 	nclient6.AllDHCPRelayAgentsAndServers.Zone = ifname
 
-	client, err := nclient6.New(ifname, nclient6.WithDebugLogger())
+	opts := []nclient6.ClientOpt{}
+	if *debug {
+		opts = append(opts, nclient6.WithDebugLogger())
+	}
+	client, err := nclient6.New(ifname, opts...)
 	if err != nil {
 		return NetConf{}, err
 	}

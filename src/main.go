@@ -30,6 +30,10 @@ var (
 		"test",
 		"Perform a self-test of network attach functionality of the running daemon.",
 	).Bool()
+	debug = kingpin.Flag(
+		"debug",
+		"Print DHCP packets.",
+	).Bool()
 
 	// auto-prune functionality
 	expireTime = kingpin.Flag(
