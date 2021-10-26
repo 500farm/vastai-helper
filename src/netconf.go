@@ -39,7 +39,7 @@ func (conf *NetConf) hasV6() bool {
 	return conf.v6.prefix.IP != nil
 }
 
-func gwAddress(prefix net.IPNet) net.IP {
+func autoGwAddress(prefix net.IPNet) net.IP {
 	result, _ := cidr.Host(&prefix, 1)
 	return result
 }
@@ -87,24 +87,32 @@ func mergeNetConf(conf4 NetConf, conf6 NetConf, netType NetType) NetConf {
 	return result
 }
 
-func staticNetConfV6(prefix string) (NetConf, error) {
-	_, net, err := net.ParseCIDR(prefix)
+func staticNetConfV6(prefix string, gw string) (NetConf, error) {
+	_, n, err := net.ParseCIDR(prefix)
 	if err != nil {
 		return NetConf{}, err
 	}
-	len, total := net.Mask.Size()
+	len, total := n.Mask.Size()
 	if total != 128 {
 		return NetConf{}, errors.New("Please specify an IPv6 prefix")
 	}
 	if len < 48 || len > 96 {
 		return NetConf{}, errors.New("Please specify an IPv6 prefix between /48 and /96 in length")
 	}
-	log.WithFields(log.Fields{"prefix": net}).
+
+	var gwIp net.IP
+	if gw != "" {
+		gwIp = net.ParseIP(gw)
+	} else {
+		gwIp = autoGwAddress(*n)
+	}
+
+	log.WithFields(log.Fields{"prefix": n, "gw": gwIp}).
 		Info("Using static IPv6 prefix")
 	return NetConf{
 		v6: NetConfPrefix{
-			prefix:  *net,
-			gateway: gwAddress(*net),
+			prefix:  *n,
+			gateway: gwIp,
 		},
 	}, nil
 }

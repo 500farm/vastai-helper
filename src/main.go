@@ -24,6 +24,10 @@ var (
 		"ipv6-prefix",
 		"Static IPv6 prefix for address assignment (length from /48 to /96).",
 	).String()
+	ipv6Gateway = kingpin.Flag(
+		"ipv6-gateway",
+		"Static IPv6 gateway address (must be inside --ipv6-prefix).",
+	).String()
 
 	// testing
 	test = kingpin.Flag(
@@ -85,12 +89,14 @@ func main() {
 	}
 
 	if netType != None && *netInterface == "" {
-		log.Fatal("For network functionality --net-interface is required.")
+		log.Fatal("Network functionality requires --net-interface.")
 	}
 
 	if netType == Ipvlan {
+		if *ipv6Prefix == "" || *ipv6Gateway == "" {
+			log.Fatal("Ipvlan network requires --ipv6-prefix and --ipv6-gateway")
+		}
 		os.MkdirAll(leaseStateDir(), 0700)
-		go dhcpRenewLoopV4(ctx)
 	}
 
 	os.MkdirAll(pruneStateDir(), 0700)
@@ -100,20 +106,26 @@ func main() {
 		var netConfV6, netConfV4 NetConf
 		var err error
 
-		if *ipv6Prefix != "" {
-			netConfV6, err = staticNetConfV6(*ipv6Prefix)
-		} else {
-			netConfV6, err = dhcpNetConfV6(ctx, *netInterface, netType == Ipvlan)
-		}
-		if err != nil {
-			log.Fatal(err)
-		}
+		if netType == Bridge {
+			if *ipv6Prefix != "" {
+				netConfV6, err = staticNetConfV6(*ipv6Prefix, "")
+			} else {
+				netConfV6, err = dhcpNetConfV6(ctx, *netInterface, false)
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
 
-		if netType == Ipvlan {
+		} else if netType == Ipvlan {
+			netConfV6, err = staticNetConfV6(*ipv6Prefix, *ipv6Gateway)
+			if err != nil {
+				log.Fatal(err)
+			}
 			netConfV4, err = dhcpNetConfV4(ctx, *netInterface)
 			if err != nil {
 				log.Fatal(err)
 			}
+			go dhcpRenewLoopV4(ctx)
 		}
 
 		netConf := mergeNetConf(netConfV4, netConfV6, netType)

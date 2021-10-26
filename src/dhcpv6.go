@@ -99,7 +99,7 @@ func netConfFromReplyV6(reply dhcpv6.DHCPv6, ifname string) (NetConf, error) {
 		conf := NetConf{
 			v6: NetConfPrefix{
 				prefix:            prefix,
-				gateway:           gwAddress(prefix),
+				gateway:           autoGwAddress(prefix),
 				preferredLifetime: p.PreferredLifetime,
 				validLifetime:     p.ValidLifetime,
 			},
