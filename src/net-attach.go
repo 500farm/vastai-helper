@@ -41,8 +41,7 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachme
 		if err != nil {
 			return err
 		}
-		conf := lease.toNetConf()
-		att.ipv4 = conf.v4.prefix.IP
+		att.ipv4 = lease.Ip()
 		ipv4str = att.ipv4.String()
 	}
 

@@ -93,12 +93,12 @@ func (lease DhcpLeaseV4) Gateway() net.IP {
 
 func (lease DhcpLeaseV4) toNetConf() NetConf {
 	ack := lease.ClientData.ACK
+	mask := ack.SubnetMask()
 	conf := NetConf{
-		netType: None,
 		v4: NetConfPrefix{
 			prefix: net.IPNet{
-				IP:   lease.Ip(),
-				Mask: ack.SubnetMask(),
+				IP:   lease.Ip().Mask(mask),
+				Mask: mask,
 			},
 			gateway:           lease.Gateway(),
 			preferredLifetime: lease.Ttl / 2,
