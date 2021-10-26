@@ -243,9 +243,9 @@ func updateImageChainExpireTime(ctx context.Context, cli *client.Client, leafIds
 		}
 	}
 	log.WithFields(log.Fields{
-		"images":  unique(images),
-		"tags":    unique(tags),
-		"expires": (time.Now().Add(*taggedImageExpireTime)).Format(time.RFC3339),
+		"images": unique(images),
+		"tags":   unique(tags),
+		"expire": (time.Now().Add(*taggedImageExpireTime)).Format(time.RFC3339),
 	}).Info("Updated image expiration")
 	return nil
 }
