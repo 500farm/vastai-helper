@@ -151,5 +151,5 @@ func leaseStateDir() string {
 }
 
 func leaseStateFile(clientId []byte) string {
-	return stateDir() + hex.EncodeToString(clientId) + ".json"
+	return leaseStateDir() + hex.EncodeToString(clientId) + ".json"
 }
