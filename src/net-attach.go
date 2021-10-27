@@ -30,8 +30,6 @@ type Attachment struct {
 }
 
 func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachment) error {
-	// TODO only do this if attached to default network
-
 	// ipv6
 	att.ipv6 = randomIp(att.net.v6prefix)
 	ipv6str := att.ipv6.String()
