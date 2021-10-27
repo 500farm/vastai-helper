@@ -120,6 +120,7 @@ func createDockerNet(ctx context.Context, cli *client.Client, driver string, net
 		v4prefix:  netConf.v4.prefix,
 		v4gateway: netConf.v4.gateway,
 		ifname:    netConf.ifname,
+		driver:    driver,
 	}
 
 	options := make(map[string]string)
