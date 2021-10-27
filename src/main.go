@@ -93,9 +93,6 @@ func main() {
 	}
 
 	if netType == Ipvlan {
-		if *ipv6Prefix == "" {
-			log.Fatal("Ipvlan network requires --ipv6-prefix")
-		}
 		os.MkdirAll(leaseStateDir(), 0700)
 	}
 
@@ -117,7 +114,12 @@ func main() {
 			}
 
 		} else if netType == Ipvlan {
-			netConfV6, err = staticNetConfV6(*ipv6Prefix, *ipv6Gateway)
+			if *ipv6Prefix != "" {
+				netConfV6, err = staticNetConfV6(*ipv6Prefix, *ipv6Gateway)
+			} else {
+				// TODO auto configuration via NDP
+				log.Fatal("IPv6 auto-configuration is not supported in Ipvlan mode, please use --ipv6-prefix.")
+			}
 			if err != nil {
 				log.Fatal(err)
 			}
