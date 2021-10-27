@@ -18,7 +18,7 @@ func dhcpLeaseV4(ctx context.Context, ifname string, clientId []byte, hostName s
 	if err != nil {
 		return DhcpLeaseV4{}, err
 	}
-	log.WithFields(log.Fields{"ifname": iface.Name, "clientid": hex.EncodeToString(clientId)}).
+	log.WithFields(log.Fields{"ifname": iface.Name, "clientid": hex.EncodeToString(clientId), "prefip": prefIp}).
 		Info("DHCPv4 request")
 
 	opts := []nclient4.ClientOpt{}

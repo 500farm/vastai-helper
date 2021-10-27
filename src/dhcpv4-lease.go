@@ -91,29 +91,6 @@ func (lease DhcpLeaseV4) Gateway() net.IP {
 	return nil
 }
 
-func (lease DhcpLeaseV4) toNetConf() NetConf {
-	ack := lease.ClientData.ACK
-	mask := ack.SubnetMask()
-	conf := NetConf{
-		v4: NetConfPrefix{
-			prefix: net.IPNet{
-				IP:   lease.Ip().Mask(mask),
-				Mask: mask,
-			},
-			gateway:           lease.Gateway(),
-			preferredLifetime: lease.Ttl / 2,
-			validLifetime:     lease.Ttl,
-		},
-		dnsServers: ack.DNS(),
-		ifname:     lease.IfName,
-	}
-	search := ack.DomainSearch()
-	if search != nil {
-		conf.dnsSearchList = search.Labels
-	}
-	return conf
-}
-
 func (lease DhcpLeaseV4) renew(ctx context.Context) (DhcpLeaseV4, error) {
 	return dhcpLeaseV4(ctx, lease.IfName, lease.ClientId, lease.HostName, lease.Ip())
 }
