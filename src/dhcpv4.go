@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net"
+	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -87,6 +88,8 @@ func dhcpRenewAllV4(ctx context.Context) error {
 }
 
 func dhcpRenewLoopV4(ctx context.Context) {
+	os.MkdirAll(leaseStateDir(), 0700)
+
 	for {
 		time.Sleep(time.Minute)
 		err := dhcpRenewAllV4(ctx)

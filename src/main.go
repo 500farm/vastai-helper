@@ -70,7 +70,7 @@ func main() {
 	ctx := context.Background()
 
 	if *test {
-		if err := selfTest(ctx, createDockerClient()); err != nil {
+		if err := selfTest(ctx, cli); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -92,14 +92,12 @@ func main() {
 		log.Fatal("Network functionality requires --net-interface.")
 	}
 
-	if netType == Ipvlan {
-		os.MkdirAll(leaseStateDir(), 0700)
-	}
-
+	// auto-prune runner
 	os.MkdirAll(pruneStateDir(), 0700)
 	go dockerPruneLoop(ctx, cli)
 
 	if netType != None {
+		// network stuff
 		var netConfV6, netConfV4 NetConf
 		var err error
 
@@ -138,9 +136,11 @@ func main() {
 			log.Fatal(err)
 		}
 
+		// docker event processor
 		dockerEventLoop(ctx, cli, &dockerNet)
 
 	} else {
+		// docker event processor
 		dockerEventLoop(ctx, cli, nil)
 	}
 }
