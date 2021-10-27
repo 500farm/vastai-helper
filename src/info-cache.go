@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+	"github.com/docker/go-units"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -33,7 +34,7 @@ type InstanceInfo struct {
 	Gpus        []int
 	Created     time.Time
 	Started     time.Time
-	// Size        int64
+	StorageSize int64
 	InternalIps InstanceIps
 	ExternalIps InstanceIps
 }
@@ -97,6 +98,11 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 
 	inst.Started, _ = time.Parse(time.RFC3339Nano, ctJson.State.StartedAt)
 	inst.Created, _ = time.Parse(time.RFC3339Nano, ctJson.Created)
+
+	inst.StorageSize, err = units.FromHumanSize(ctJson.HostConfig.StorageOpt["size"])
+	if err != nil {
+		inst.StorageSize = 0
+	}
 
 	for t := range ctJson.Config.ExposedPorts {
 		inst.Ports = append(inst.Ports, t)

@@ -9,6 +9,7 @@ require (
 	github.com/coreos/go-iptables v0.5.0
 	github.com/docker/docker v20.10.8+incompatible
 	github.com/docker/go-connections v0.4.0
+	github.com/docker/go-units v0.4.0
 	github.com/insomniacslk/dhcp v0.0.0-20210827173440-b95caade3eac
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1
