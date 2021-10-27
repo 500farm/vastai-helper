@@ -30,6 +30,9 @@ type Attachment struct {
 }
 
 func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachment) error {
+	// TODO only do this if attached to default network
+	// TODO also detach from default net?
+
 	// ipv6
 	att.ipv6 = randomIp(att.net.v6prefix)
 	ipv6str := att.ipv6.String()
@@ -49,8 +52,6 @@ func attachContainerToNet(ctx context.Context, cli *client.Client, att *Attachme
 	log.WithFields(att.logFields()).
 		WithFields(log.Fields{"net": att.net.name, "v6.ip": ipv6str, "v4.ip": ipv4str}).
 		Info("Attaching container to network")
-
-	// TODO also detach from default net?
 
 	ipamConfig := network.EndpointIPAMConfig{
 		IPv6Address: ipv6str,
