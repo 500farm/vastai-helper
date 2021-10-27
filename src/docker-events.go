@@ -172,6 +172,6 @@ func processEventWithNet(ctx context.Context, cli *client.Client, event *events.
 }
 
 func shouldExposeContainer(cname string, image string) bool {
-	// temporarily exclude vast.ai containers
-	return !strings.HasPrefix(cname, "C.")
+	// temporarily exclude vast.ai containers and promtail
+	return !strings.HasPrefix(cname, "C.") && cname != "promtail"
 }
