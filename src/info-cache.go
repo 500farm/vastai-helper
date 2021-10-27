@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -37,7 +39,8 @@ type InstanceInfo struct {
 }
 type InfoCache struct {
 	HostName  string
-	Gpus      []string
+	NumGpus   int
+	GpuStatus []string
 	Instances []InstanceInfo
 }
 
@@ -45,23 +48,38 @@ var infoCache InfoCache
 
 func (c *InfoCache) load(ctx context.Context, cli *client.Client) error {
 	c.HostName, _ = os.Hostname()
+	c.NumGpus = getNumGpus()
+	return c.update(ctx, cli)
+}
 
+func (c *InfoCache) update(ctx context.Context, cli *client.Client) error {
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
 	if err != nil {
 		return err
 	}
 	c.Instances = make([]InstanceInfo, 0, len(containers))
 	for _, container := range containers {
-		inst, err := c.getContainerInfo(ctx, cli, container.ID)
+		inst, err := getContainerInfo(ctx, cli, container.ID)
 		if err != nil {
 			return err
 		}
 		c.Instances = append(c.Instances, inst)
 	}
+	c.afterUpdate()
 	return nil
 }
 
-func (c *InfoCache) getContainerInfo(ctx context.Context, cli *client.Client, cid string) (InstanceInfo, error) {
+func getNumGpus() int {
+	cmd := exec.Command("nvidia-smi", "-L")
+	out, err := cmd.Output()
+	if err != nil {
+		log.Error(err)
+		return 0
+	}
+	return strings.Count(string(out), "\n")
+}
+
+func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (InstanceInfo, error) {
 	ctJson, err := cli.ContainerInspect(ctx, cid)
 	if err != nil {
 		return InstanceInfo{}, err
@@ -107,17 +125,19 @@ func (c *InfoCache) getContainerInfo(ctx context.Context, cli *client.Client, ci
 			}
 		}
 	}
+	sort.Ints(inst.Gpus)
 
 	return inst, nil
 }
 
 func (c *InfoCache) updateContainerInfo(ctx context.Context, cli *client.Client, cid string) error {
-	newInst, err := c.getContainerInfo(ctx, cli, cid)
+	newInst, err := getContainerInfo(ctx, cli, cid)
 	if err != nil {
 		return err
 	}
 	c.deleteContainerInfo(cid)
 	c.Instances = append(c.Instances, newInst)
+	c.afterUpdate()
 	return nil
 }
 
@@ -129,6 +149,19 @@ func (c *InfoCache) deleteContainerInfo(cid string) {
 		}
 	}
 	c.Instances = result
+	c.afterUpdate()
+}
+
+func (c *InfoCache) afterUpdate() {
+	c.GpuStatus = make([]string, c.NumGpus)
+	for i := 0; i < c.NumGpus; i++ {
+		c.GpuStatus[i] = "free"
+	}
+	for _, inst := range c.Instances {
+		for _, i := range inst.Gpus {
+			c.GpuStatus[i] = "busy"
+		}
+	}
 }
 
 func (c *InfoCache) json() []byte {
