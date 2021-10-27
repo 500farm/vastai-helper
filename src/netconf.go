@@ -40,7 +40,7 @@ func (conf *NetConf) hasV6() bool {
 }
 
 func autoGwAddress(prefix net.IPNet) net.IP {
-	result, _ := cidr.Host(&prefix, 0)
+	result, _ := cidr.Host(&prefix, 1)
 	return result
 }
 
