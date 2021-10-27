@@ -161,11 +161,15 @@ func (c *InfoCache) deleteContainerInfo(cid string) {
 func (c *InfoCache) afterUpdate() {
 	c.GpuStatus = make([]string, c.NumGpus)
 	for i := 0; i < c.NumGpus; i++ {
-		c.GpuStatus[i] = "free"
+		c.GpuStatus[i] = "idle"
 	}
 	for _, inst := range c.Instances {
 		for _, i := range inst.Gpus {
-			c.GpuStatus[i] = "busy"
+			if strings.HasPrefix(inst.Image, "sergeycheperis/docker-ethminer") {
+				c.GpuStatus[i] = "mining"
+			} else {
+				c.GpuStatus[i] = "busy"
+			}
 		}
 	}
 }
