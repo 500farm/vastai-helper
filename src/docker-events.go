@@ -74,6 +74,10 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 		}
 		if event.Action == "start" {
 			logger.Info("Container started")
+			err := infoCache.updateContainerInfo(ctx, cli, cid)
+			if err != nil {
+				logger.Error(err)
+			}
 			return
 		}
 		if event.Action == "die" {
@@ -89,6 +93,7 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 					WithFields(log.Fields{"exitCode": exitCode}).
 					Error("Container exited with error")
 			}
+			infoCache.deleteContainerInfo(cid)
 			return
 		}
 		if event.Action == "destroy" {

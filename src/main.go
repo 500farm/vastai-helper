@@ -103,7 +103,7 @@ func main() {
 	go dockerPruneLoop(ctx, cli)
 
 	// container info cache and web server
-	err := infoCache.start()
+	err := infoCache.start(ctx, cli)
 	if err != nil {
 		log.Fatal(err)
 	}

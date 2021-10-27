@@ -133,6 +133,8 @@ func routeOrUnroutePorts(ctx context.Context, cli *client.Client, att *Attachmen
 }
 
 func portsToExpose(ctx context.Context, cli *client.Client, att *Attachment) ([]PortRange, error) {
+	// TODO save ContainerInspect call by getting data from InfoCache
+
 	ranges := []PortRange{}
 	ctJson, err := cli.ContainerInspect(ctx, att.cid)
 	if err != nil {
