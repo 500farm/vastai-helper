@@ -52,6 +52,12 @@ var (
 		"prune-interval",
 		"Interval between prune runs.",
 	).Default("4h").Duration()
+
+	// web server
+	webServerBind = kingpin.Flag(
+		"web-server-bind",
+		"Web server listen address and/or port.",
+	).Default(":9014").String()
 )
 
 func createDockerClient() *client.Client {
@@ -95,6 +101,12 @@ func main() {
 	// auto-prune runner
 	os.MkdirAll(pruneStateDir(), 0700)
 	go dockerPruneLoop(ctx, cli)
+
+	// container info cache and web server
+	err := infoCache.start()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if netType != None {
 		// network stuff
