@@ -21,7 +21,7 @@ import (
 )
 
 type ContainerIps struct {
-	V4, V6 net.IP `json:",omitempty"`
+	V4, V6 net.IP
 }
 
 type ContainerInfo struct {
@@ -31,12 +31,12 @@ type ContainerInfo struct {
 	Command     string
 	Ports       []nat.Port
 	Labels      map[string]string
-	CudaVersion string `json:",omitempty"`
+	CudaVersion string
 	Gpus        []int
 	Created     time.Time
-	Started     *time.Time `json:",omitempty"`
-	Finished    *time.Time `json:",omitempty"`
-	StorageSize int64      `json:",omitempty"`
+	Started     *time.Time
+	Finished    *time.Time
+	StorageSize *int64
 	InternalIps ContainerIps
 	ExternalIps ContainerIps
 
@@ -123,9 +123,9 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Cont
 		inst.Finished = &t2
 	}
 
-	inst.StorageSize, err = units.FromHumanSize(ctJson.HostConfig.StorageOpt["size"])
-	if err != nil {
-		inst.StorageSize = 0
+	t3, err := units.FromHumanSize(ctJson.HostConfig.StorageOpt["size"])
+	if err == nil && t3 > 0 {
+		inst.StorageSize = &t3
 	}
 
 	for t := range ctJson.Config.ExposedPorts {
