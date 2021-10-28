@@ -225,6 +225,7 @@ func (c *InfoCache) json() []byte {
 }
 
 func (c *InfoCache) generateJson() []byte {
+	// filter out mining containers
 	exposed := []ContainerInfo{}
 	for _, inst := range c.Containers {
 		if inst.shouldExpose() {
