@@ -100,6 +100,7 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 
 	name := strings.TrimPrefix(ctJson.Name, "/")
 	inst := InstanceInfo{
+		id:      ctJson.ID,
 		Name:    name,
 		Image:   ctJson.Config.Image,
 		Command: ctJson.Path + " " + strings.Join(ctJson.Args, " "),
