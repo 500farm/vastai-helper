@@ -164,13 +164,18 @@ func (c *InfoCache) updateContainerInfo(ctx context.Context, cli *client.Client,
 	if err != nil {
 		return err
 	}
-	c.deleteContainerInfo(cid)
+	c._deleteContainerInfo(cid)
 	c.Instances = append(c.Instances, newInst)
 	c.afterUpdate()
 	return nil
 }
 
 func (c *InfoCache) deleteContainerInfo(cid string) {
+	c._deleteContainerInfo(cid)
+	c.afterUpdate()
+}
+
+func (c *InfoCache) _deleteContainerInfo(cid string) {
 	result := make([]InstanceInfo, 0, len(c.Instances))
 	for _, inst := range c.Instances {
 		if inst.id != cid {
@@ -178,7 +183,6 @@ func (c *InfoCache) deleteContainerInfo(cid string) {
 		}
 	}
 	c.Instances = result
-	c.afterUpdate()
 }
 
 func (c *InfoCache) afterUpdate() {
