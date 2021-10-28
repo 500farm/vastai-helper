@@ -47,6 +47,8 @@ type InfoCache struct {
 	NumGpus   int
 	GpuStatus []string
 	Instances []InstanceInfo
+	// internal
+	cachedJson []byte
 }
 
 var infoCache InfoCache
@@ -208,23 +210,18 @@ func (c *InfoCache) afterUpdate() {
 		}
 		return c.Instances[i].Created.After(c.Instances[j].Created)
 	})
+
+	// cache json
+	var err error
+	c.cachedJson, err = json.MarshalIndent(*c, "", "    ")
+	if err != nil {
+		log.Error(err)
+		c.cachedJson = []byte("{}")
+	}
 }
 
 func (c *InfoCache) json() []byte {
-	j, err := json.MarshalIndent(*c, "", "    ")
-	if err == nil {
-		return j
-	}
-	return errorJson(err)
-}
-
-func errorJson(err error) []byte {
-	var e struct {
-		Error string
-	}
-	e.Error = err.Error()
-	j, _ := json.Marshal(e)
-	return j
+	return c.cachedJson
 }
 
 func (c *InfoCache) start(ctx context.Context, cli *client.Client) error {
