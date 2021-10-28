@@ -85,11 +85,11 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			} else if exitCode > 128 {
 				logger.
 					WithFields(log.Fields{"signal": exitCode - 128}).
-					Error("Container killed with signal")
+					Warn("Container killed with signal")
 			} else {
 				logger.
 					WithFields(log.Fields{"exitCode": exitCode}).
-					Error("Container exited with error")
+					Warn("Container exited with error")
 			}
 
 		} else if event.Action == "destroy" {
@@ -105,7 +105,7 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 				Info("Container exec")
 
 		} else if event.Action == "oom" {
-			logger.Error("Container triggered OOM")
+			logger.Warn("Container triggered OOM")
 		}
 
 		if shouldCacheContainerInfo(cname, image) {
