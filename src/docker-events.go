@@ -108,7 +108,7 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			logger.Error("Container triggered OOM")
 		}
 
-		if shouldExposeContainer(cname, image) {
+		if shouldCacheContainerInfo(cname, image) {
 			if event.Action == "create" || event.Action == "start" || event.Action == "die" {
 				err := infoCache.updateContainerInfo(ctx, cli, cid)
 				if err != nil {

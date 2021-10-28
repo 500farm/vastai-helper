@@ -68,7 +68,7 @@ func (c *InfoCache) update(ctx context.Context, cli *client.Client) error {
 	}
 	c.Containers = make([]ContainerInfo, 0, len(containers))
 	for _, container := range containers {
-		if !shouldExposeContainer(container.Names[0], container.Image) {
+		if !shouldCacheContainerInfo(container.Names[0], container.Image) {
 			continue
 		}
 		inst, err := getContainerInfo(ctx, cli, container.ID)
@@ -109,8 +109,8 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Cont
 		Gpus:    []int{},
 		Status:  ctJson.State.Status,
 	}
-	if !shouldExposeContainer(name, inst.Image) {
-		return ContainerInfo{}, fmt.Errorf("Container %s (%s) should not be exposed via API", name, inst.Image)
+	if !shouldCacheContainerInfo(name, inst.Image) {
+		return ContainerInfo{}, fmt.Errorf("Container %s (%s) should not be cached", name, inst.Image)
 	}
 
 	inst.Created, _ = time.Parse(time.RFC3339Nano, ctJson.Created)
@@ -194,7 +194,7 @@ func (c *InfoCache) afterUpdate() {
 	for _, inst := range c.Containers {
 		if inst.Status == "running" {
 			for _, i := range inst.Gpus {
-				if isMiningImage(inst.Image) {
+				if inst.isMiningImage() {
 					c.GpuStatus[i] = "mining"
 				} else {
 					c.GpuStatus[i] = "busy"
@@ -217,16 +217,30 @@ func (c *InfoCache) afterUpdate() {
 	})
 
 	// cache json
-	var err error
-	c.cachedJson, err = json.MarshalIndent(*c, "", "    ")
-	if err != nil {
-		log.Error(err)
-		c.cachedJson = []byte("{}")
-	}
+	c.cachedJson = c.generateJson()
 }
 
 func (c *InfoCache) json() []byte {
 	return c.cachedJson
+}
+
+func (c *InfoCache) generateJson() []byte {
+	exposed := []ContainerInfo{}
+	for _, inst := range c.Containers {
+		if inst.shouldExpose() {
+			exposed = append(exposed, inst)
+		}
+	}
+	t := *c
+	t.Containers = exposed
+
+	var err error
+	result, err := json.MarshalIndent(t, "", "    ")
+	if err != nil {
+		log.Error(err)
+		result = []byte("{}")
+	}
+	return result
 }
 
 func (c *InfoCache) start(ctx context.Context, cli *client.Client) error {
@@ -249,13 +263,16 @@ func startWebServer() {
 	}
 }
 
-func isMiningImage(image string) bool {
-	return strings.HasPrefix(image, "sergeycheperis/docker-ethminer")
+func (c *ContainerInfo) isMiningImage() bool {
+	return strings.HasPrefix(c.Image, "sergeycheperis/docker-ethminer")
 }
 
-func shouldExposeContainer(cname string, image string) bool {
-	return (strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")) &&
-		!isMiningImage(image)
+func (c *ContainerInfo) shouldExpose() bool {
+	return !c.isMiningImage()
+}
+
+func shouldCacheContainerInfo(cname string, image string) bool {
+	return strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")
 }
 
 func (inst *ContainerInfo) statusOrder() int {
