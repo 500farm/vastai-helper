@@ -39,10 +39,8 @@ type InstanceInfo struct {
 	StorageSize int64      `json:",omitempty"`
 	InternalIps InstanceIps
 	ExternalIps InstanceIps
-
 	// internal
-	id      string
-	running bool
+	id string
 }
 type InfoCache struct {
 	HostName  string
@@ -155,8 +153,6 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 		}
 	}
 	sort.Ints(inst.Gpus)
-
-	inst.running = inst.Status == "running"
 	return inst, nil
 }
 
@@ -189,7 +185,7 @@ func (c *InfoCache) afterUpdate() {
 		c.GpuStatus[i] = "idle"
 	}
 	for _, inst := range c.Instances {
-		if inst.running {
+		if inst.Status == "running" {
 			for _, i := range inst.Gpus {
 				if isMiningImage(inst.Image) {
 					c.GpuStatus[i] = "mining"
@@ -202,15 +198,15 @@ func (c *InfoCache) afterUpdate() {
 
 	// sort: running first, newest first
 	sort.Slice(c.Instances, func(i, j int) bool {
-		running1 := c.Instances[i].running
-		running2 := c.Instances[j].running
-		if running1 && !running2 {
+		st1 := c.Instances[i].statusOrder()
+		st2 := c.Instances[j].statusOrder()
+		if st1 < st2 {
 			return true
-		} else if !running1 && running2 {
-			return false
-		} else {
-			return c.Instances[i].Created.After(c.Instances[j].Created)
 		}
+		if st1 > st2 {
+			return false
+		}
+		return c.Instances[i].Created.After(c.Instances[j].Created)
 	})
 }
 
@@ -258,4 +254,20 @@ func isMiningImage(image string) bool {
 func shouldExposeContainer(cname string, image string) bool {
 	return (strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")) &&
 		!isMiningImage(image)
+}
+
+func (inst *InstanceInfo) statusOrder() int {
+	if inst.Status == "running" {
+		return 0
+	}
+	if inst.Status == "paused" || inst.Status == "restarting" {
+		return 1
+	}
+	if inst.Status == "exited" {
+		return 2
+	}
+	if inst.Status == "created" {
+		return 3
+	}
+	return 4
 }
