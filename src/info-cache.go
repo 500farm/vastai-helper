@@ -68,12 +68,13 @@ func (c *InfoCache) update(ctx context.Context, cli *client.Client) error {
 	}
 	c.Instances = make([]InstanceInfo, 0, len(containers))
 	for _, container := range containers {
-		if !shouldExposeContainer(container.Names[0]) {
+		if !shouldExposeContainer(container.Names[0], container.Image) {
 			continue
 		}
 		inst, err := getContainerInfo(ctx, cli, container.ID)
 		if err != nil {
-			return err
+			log.Error(err)
+			continue
 		}
 		c.Instances = append(c.Instances, inst)
 	}
@@ -98,9 +99,6 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 	}
 
 	name := strings.TrimPrefix(ctJson.Name, "/")
-	if !shouldExposeContainer(name) {
-		return InstanceInfo{}, fmt.Errorf("Container %s should not be exposed via API", name)
-	}
 	inst := InstanceInfo{
 		Name:    name,
 		Image:   ctJson.Config.Image,
@@ -109,6 +107,9 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 		Ports:   []nat.Port{},
 		Gpus:    []int{},
 		Status:  ctJson.State.Status,
+	}
+	if !shouldExposeContainer(name, inst.Image) {
+		return InstanceInfo{}, fmt.Errorf("Container %s (%s) should not be exposed via API", name, inst.Image)
 	}
 
 	inst.Created, _ = time.Parse(time.RFC3339Nano, ctJson.Created)
@@ -190,7 +191,7 @@ func (c *InfoCache) afterUpdate() {
 	for _, inst := range c.Instances {
 		if inst.running {
 			for _, i := range inst.Gpus {
-				if strings.HasPrefix(inst.Image, "sergeycheperis/docker-ethminer") {
+				if isMiningImage(inst.Image) {
 					c.GpuStatus[i] = "mining"
 				} else {
 					c.GpuStatus[i] = "busy"
@@ -250,6 +251,11 @@ func startWebServer() {
 	}
 }
 
-func shouldExposeContainer(cname string) bool {
-	return strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")
+func isMiningImage(image string) bool {
+	return strings.HasPrefix(image, "sergeycheperis/docker-ethminer")
+}
+
+func shouldExposeContainer(cname string, image string) bool {
+	return (strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")) &&
+		!isMiningImage(image)
 }
