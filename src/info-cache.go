@@ -21,7 +21,7 @@ import (
 )
 
 type InstanceIps struct {
-	V4, V6 net.IP
+	V4, V6 net.IP `json:",omitempty"`
 }
 
 type InstanceInfo struct {
@@ -31,12 +31,12 @@ type InstanceInfo struct {
 	Command     string
 	Ports       []nat.Port
 	Labels      map[string]string
-	CudaVersion string
+	CudaVersion string `json:",omitempty"`
 	Gpus        []int
 	Created     time.Time
-	Started     time.Time `json:",omitempty"`
-	Finished    time.Time `json:",omitempty"`
-	StorageSize int64     `json:",omitempty"`
+	Started     *time.Time `json:",omitempty"`
+	Finished    *time.Time `json:",omitempty"`
+	StorageSize int64      `json:",omitempty"`
 	InternalIps InstanceIps
 	ExternalIps InstanceIps
 
@@ -112,8 +112,14 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 	}
 
 	inst.Created, _ = time.Parse(time.RFC3339Nano, ctJson.Created)
-	inst.Started, _ = time.Parse(time.RFC3339Nano, ctJson.State.StartedAt)
-	inst.Finished, _ = time.Parse(time.RFC3339Nano, ctJson.State.FinishedAt)
+	t, err := time.Parse(time.RFC3339Nano, ctJson.State.StartedAt)
+	if err == nil && !t.IsZero() {
+		inst.Started = &t
+	}
+	t, err = time.Parse(time.RFC3339Nano, ctJson.State.FinishedAt)
+	if err == nil && !t.IsZero() {
+		inst.Finished = &t
+	}
 
 	inst.StorageSize, err = units.FromHumanSize(ctJson.HostConfig.StorageOpt["size"])
 	if err != nil {
@@ -182,11 +188,13 @@ func (c *InfoCache) afterUpdate() {
 		c.GpuStatus[i] = "idle"
 	}
 	for _, inst := range c.Instances {
-		for _, i := range inst.Gpus {
-			if strings.HasPrefix(inst.Image, "sergeycheperis/docker-ethminer") {
-				c.GpuStatus[i] = "mining"
-			} else {
-				c.GpuStatus[i] = "busy"
+		if inst.running {
+			for _, i := range inst.Gpus {
+				if strings.HasPrefix(inst.Image, "sergeycheperis/docker-ethminer") {
+					c.GpuStatus[i] = "mining"
+				} else {
+					c.GpuStatus[i] = "busy"
+				}
 			}
 		}
 	}
