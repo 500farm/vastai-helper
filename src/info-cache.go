@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -24,7 +25,7 @@ type InstanceIps struct {
 }
 
 type InstanceInfo struct {
-	id          string
+	Status      string
 	Name        string
 	Image       string
 	Command     string
@@ -33,10 +34,15 @@ type InstanceInfo struct {
 	CudaVersion string
 	Gpus        []int
 	Created     time.Time
-	Started     time.Time
-	StorageSize int64
+	Started     time.Time `json:",omitempty"`
+	Finished    time.Time `json:",omitempty"`
+	StorageSize int64     `json:",omitempty"`
 	InternalIps InstanceIps
 	ExternalIps InstanceIps
+
+	// internal
+	id      string
+	running bool
 }
 type InfoCache struct {
 	HostName  string
@@ -54,12 +60,17 @@ func (c *InfoCache) load(ctx context.Context, cli *client.Client) error {
 }
 
 func (c *InfoCache) update(ctx context.Context, cli *client.Client) error {
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
+		All: true,
+	})
 	if err != nil {
 		return err
 	}
 	c.Instances = make([]InstanceInfo, 0, len(containers))
 	for _, container := range containers {
+		if !shouldExposeContainer(container.Names[0]) {
+			continue
+		}
 		inst, err := getContainerInfo(ctx, cli, container.ID)
 		if err != nil {
 			return err
@@ -87,6 +98,9 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 	}
 
 	name := strings.TrimPrefix(ctJson.Name, "/")
+	if !shouldExposeContainer(name) {
+		return InstanceInfo{}, fmt.Errorf("Container %s should not be exposed via API", name)
+	}
 	inst := InstanceInfo{
 		Name:    name,
 		Image:   ctJson.Config.Image,
@@ -94,10 +108,12 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 		Labels:  ctJson.Config.Labels,
 		Ports:   []nat.Port{},
 		Gpus:    []int{},
+		Status:  ctJson.State.Status,
 	}
 
-	inst.Started, _ = time.Parse(time.RFC3339Nano, ctJson.State.StartedAt)
 	inst.Created, _ = time.Parse(time.RFC3339Nano, ctJson.Created)
+	inst.Started, _ = time.Parse(time.RFC3339Nano, ctJson.State.StartedAt)
+	inst.Finished, _ = time.Parse(time.RFC3339Nano, ctJson.State.FinishedAt)
 
 	inst.StorageSize, err = units.FromHumanSize(ctJson.HostConfig.StorageOpt["size"])
 	if err != nil {
@@ -133,6 +149,7 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 	}
 	sort.Ints(inst.Gpus)
 
+	inst.running = inst.Status == "running"
 	return inst, nil
 }
 
@@ -159,6 +176,7 @@ func (c *InfoCache) deleteContainerInfo(cid string) {
 }
 
 func (c *InfoCache) afterUpdate() {
+	// fill GpuStatus
 	c.GpuStatus = make([]string, c.NumGpus)
 	for i := 0; i < c.NumGpus; i++ {
 		c.GpuStatus[i] = "idle"
@@ -172,6 +190,19 @@ func (c *InfoCache) afterUpdate() {
 			}
 		}
 	}
+
+	// sort: running first, newest first
+	sort.Slice(c.Instances, func(i, j int) bool {
+		running1 := c.Instances[i].running
+		running2 := c.Instances[j].running
+		if running1 && !running2 {
+			return true
+		} else if !running1 && running2 {
+			return false
+		} else {
+			return c.Instances[i].Created.After(c.Instances[j].Created)
+		}
+	})
 }
 
 func (c *InfoCache) json() []byte {
@@ -209,4 +240,8 @@ func startWebServer() {
 	if err := http.ListenAndServe(*webServerBind, nil); err != nil {
 		logger.Error(err)
 	}
+}
+
+func shouldExposeContainer(cname string) bool {
+	return strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")
 }

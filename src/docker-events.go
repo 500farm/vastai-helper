@@ -71,19 +71,14 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			"cname": cname,
 			"image": image,
 		})
+
 		if event.Action == "create" {
 			logger.Info("Container created")
-			return
-		}
-		if event.Action == "start" {
+
+		} else if event.Action == "start" {
 			logger.Info("Container started")
-			err := infoCache.updateContainerInfo(ctx, cli, cid)
-			if err != nil {
-				logger.Error(err)
-			}
-			return
-		}
-		if event.Action == "die" {
+
+		} else if event.Action == "die" {
 			exitCode, _ := strconv.Atoi(event.Actor.Attributes["exitCode"])
 			if exitCode == 0 {
 				logger.Info("Container exited normally")
@@ -96,26 +91,32 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 					WithFields(log.Fields{"exitCode": exitCode}).
 					Error("Container exited with error")
 			}
-			infoCache.deleteContainerInfo(cid)
-			return
-		}
-		if event.Action == "destroy" {
+
+		} else if event.Action == "destroy" {
 			logger.Info("Container destroyed")
 			err := updateImageChainExpireTime(ctx, cli, []string{image})
 			if err != nil {
 				logger.Error(err)
 			}
-			return
-		}
-		if strings.HasPrefix(event.Action, "exec_start: ") {
+
+		} else if strings.HasPrefix(event.Action, "exec_start: ") {
 			logger.
 				WithFields(log.Fields{"event": "exec", "cmd": strings.TrimSpace(event.Action[12:])}).
 				Info("Container exec")
-			return
-		}
-		if event.Action == "oom" {
+
+		} else if event.Action == "oom" {
 			logger.Error("Container triggered OOM")
-			return
+		}
+
+		if shouldExposeContainer(cname) {
+			if event.Action == "create" || event.Action == "start" || event.Action == "die" {
+				err := infoCache.updateContainerInfo(ctx, cli, cid)
+				if err != nil {
+					logger.Error(err)
+				}
+			} else if event.Action == "destroy" {
+				infoCache.deleteContainerInfo(cid)
+			}
 		}
 	}
 
@@ -125,12 +126,9 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 				"event": "pull",
 				"image": event.Actor.ID,
 			}).Info("Docker image pulled")
-			return
-		}
 
-		if event.Action == "delete" {
+		} else if event.Action == "delete" {
 			removeImageExpireTime(event.Actor.ID)
-			return
 		}
 	}
 }
@@ -149,7 +147,7 @@ func processEventWithNet(ctx context.Context, cli *client.Client, event *events.
 		// ignore temporary containers
 		return nil
 	}
-	if !shouldExposeContainer(cname, image) {
+	if !shouldAttachContainer(cname, image) {
 		return nil
 	}
 	att := Attachment{
@@ -179,7 +177,7 @@ func processEventWithNet(ctx context.Context, cli *client.Client, event *events.
 	return nil
 }
 
-func shouldExposeContainer(cname string, image string) bool {
+func shouldAttachContainer(cname string, image string) bool {
 	// temporarily exclude vast.ai containers and promtail
 	return !strings.HasPrefix(cname, "C.") && cname != "promtail"
 }
