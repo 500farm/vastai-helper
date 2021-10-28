@@ -25,7 +25,7 @@ type ContainerIps struct {
 }
 
 type ContainerInfo struct {
-	Status      string
+	Status      string // created / restarting / running / removing / paused / exited / dead
 	Name        string
 	Image       string
 	Command     string
@@ -39,16 +39,16 @@ type ContainerInfo struct {
 	StorageSize int64      `json:",omitempty"`
 	InternalIps ContainerIps
 	ExternalIps ContainerIps
-	// internal
-	id string
+
+	id string // internal
 }
 type InfoCache struct {
 	HostName   string
 	NumGpus    int
-	GpuStatus  []string
+	GpuStatus  []string // idle / mining / busy
 	Containers []ContainerInfo
-	// internal
-	cachedJson []byte
+
+	cachedJson []byte // internal
 }
 
 var infoCache InfoCache
