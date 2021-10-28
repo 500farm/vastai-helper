@@ -111,13 +111,13 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 	}
 
 	inst.Created, _ = time.Parse(time.RFC3339Nano, ctJson.Created)
-	t, err := time.Parse(time.RFC3339Nano, ctJson.State.StartedAt)
-	if err == nil && !t.IsZero() {
-		inst.Started = &t
+	t1, err := time.Parse(time.RFC3339Nano, ctJson.State.StartedAt)
+	if err == nil && !t1.IsZero() {
+		inst.Started = &t1
 	}
-	t, err = time.Parse(time.RFC3339Nano, ctJson.State.FinishedAt)
-	if err == nil && !t.IsZero() {
-		inst.Finished = &t
+	t2, err := time.Parse(time.RFC3339Nano, ctJson.State.FinishedAt)
+	if err == nil && !t2.IsZero() {
+		inst.Finished = &t2
 	}
 
 	inst.StorageSize, err = units.FromHumanSize(ctJson.HostConfig.StorageOpt["size"])
