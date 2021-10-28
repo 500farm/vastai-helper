@@ -20,11 +20,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type InstanceIps struct {
+type ContainerIps struct {
 	V4, V6 net.IP `json:",omitempty"`
 }
 
-type InstanceInfo struct {
+type ContainerInfo struct {
 	Status      string
 	Name        string
 	Image       string
@@ -37,16 +37,16 @@ type InstanceInfo struct {
 	Started     *time.Time `json:",omitempty"`
 	Finished    *time.Time `json:",omitempty"`
 	StorageSize int64      `json:",omitempty"`
-	InternalIps InstanceIps
-	ExternalIps InstanceIps
+	InternalIps ContainerIps
+	ExternalIps ContainerIps
 	// internal
 	id string
 }
 type InfoCache struct {
-	HostName  string
-	NumGpus   int
-	GpuStatus []string
-	Instances []InstanceInfo
+	HostName   string
+	NumGpus    int
+	GpuStatus  []string
+	Containers []ContainerInfo
 	// internal
 	cachedJson []byte
 }
@@ -66,7 +66,7 @@ func (c *InfoCache) update(ctx context.Context, cli *client.Client) error {
 	if err != nil {
 		return err
 	}
-	c.Instances = make([]InstanceInfo, 0, len(containers))
+	c.Containers = make([]ContainerInfo, 0, len(containers))
 	for _, container := range containers {
 		if !shouldExposeContainer(container.Names[0], container.Image) {
 			continue
@@ -76,7 +76,7 @@ func (c *InfoCache) update(ctx context.Context, cli *client.Client) error {
 			log.Error(err)
 			continue
 		}
-		c.Instances = append(c.Instances, inst)
+		c.Containers = append(c.Containers, inst)
 	}
 	c.afterUpdate()
 	return nil
@@ -92,14 +92,14 @@ func getNumGpus() int {
 	return strings.Count(string(out), "\n")
 }
 
-func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (InstanceInfo, error) {
+func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (ContainerInfo, error) {
 	ctJson, err := cli.ContainerInspect(ctx, cid)
 	if err != nil {
-		return InstanceInfo{}, err
+		return ContainerInfo{}, err
 	}
 
 	name := strings.TrimPrefix(ctJson.Name, "/")
-	inst := InstanceInfo{
+	inst := ContainerInfo{
 		id:      ctJson.ID,
 		Name:    name,
 		Image:   ctJson.Config.Image,
@@ -110,7 +110,7 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Inst
 		Status:  ctJson.State.Status,
 	}
 	if !shouldExposeContainer(name, inst.Image) {
-		return InstanceInfo{}, fmt.Errorf("Container %s (%s) should not be exposed via API", name, inst.Image)
+		return ContainerInfo{}, fmt.Errorf("Container %s (%s) should not be exposed via API", name, inst.Image)
 	}
 
 	inst.Created, _ = time.Parse(time.RFC3339Nano, ctJson.Created)
@@ -165,7 +165,7 @@ func (c *InfoCache) updateContainerInfo(ctx context.Context, cli *client.Client,
 		return err
 	}
 	c._deleteContainerInfo(cid)
-	c.Instances = append(c.Instances, newInst)
+	c.Containers = append(c.Containers, newInst)
 	c.afterUpdate()
 	return nil
 }
@@ -176,13 +176,13 @@ func (c *InfoCache) deleteContainerInfo(cid string) {
 }
 
 func (c *InfoCache) _deleteContainerInfo(cid string) {
-	result := make([]InstanceInfo, 0, len(c.Instances))
-	for _, inst := range c.Instances {
+	result := make([]ContainerInfo, 0, len(c.Containers))
+	for _, inst := range c.Containers {
 		if inst.id != cid {
 			result = append(result, inst)
 		}
 	}
-	c.Instances = result
+	c.Containers = result
 }
 
 func (c *InfoCache) afterUpdate() {
@@ -191,7 +191,7 @@ func (c *InfoCache) afterUpdate() {
 	for i := 0; i < c.NumGpus; i++ {
 		c.GpuStatus[i] = "idle"
 	}
-	for _, inst := range c.Instances {
+	for _, inst := range c.Containers {
 		if inst.Status == "running" {
 			for _, i := range inst.Gpus {
 				if isMiningImage(inst.Image) {
@@ -204,16 +204,16 @@ func (c *InfoCache) afterUpdate() {
 	}
 
 	// sort: running first, newest first
-	sort.Slice(c.Instances, func(i, j int) bool {
-		st1 := c.Instances[i].statusOrder()
-		st2 := c.Instances[j].statusOrder()
+	sort.Slice(c.Containers, func(i, j int) bool {
+		st1 := c.Containers[i].statusOrder()
+		st2 := c.Containers[j].statusOrder()
 		if st1 < st2 {
 			return true
 		}
 		if st1 > st2 {
 			return false
 		}
-		return c.Instances[i].Created.After(c.Instances[j].Created)
+		return c.Containers[i].Created.After(c.Containers[j].Created)
 	})
 
 	// cache json
@@ -258,7 +258,7 @@ func shouldExposeContainer(cname string, image string) bool {
 		!isMiningImage(image)
 }
 
-func (inst *InstanceInfo) statusOrder() int {
+func (inst *ContainerInfo) statusOrder() int {
 	if inst.Status == "running" {
 		return 0
 	}
