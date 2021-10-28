@@ -47,7 +47,9 @@ func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
 
 		cancel()
 		time.Sleep(5 * time.Second)
+
 		// TODO reload InfoCache because events could have been missed
+		// TODO or better use the --since filter?
 	}
 }
 
