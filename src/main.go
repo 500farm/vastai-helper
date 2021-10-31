@@ -72,6 +72,8 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 
+	log.SetReportCaller(true)
+
 	cli := createDockerClient()
 	ctx := context.Background()
 

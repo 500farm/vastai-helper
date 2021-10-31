@@ -102,6 +102,7 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 
 	count := 0
 	size := uint64(0)
+	imageIds := []string{}
 	tags := []string{}
 	update := []string{}
 
@@ -125,6 +126,7 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 			} else {
 				count++
 				size += uint64(image.Size)
+				imageIds = append(imageIds, imageIdDisplay(image.ID))
 				tags = append(tags, image.RepoTags...)
 			}
 		}
@@ -132,9 +134,10 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 
 	if count > 0 {
 		log.WithFields(log.Fields{
-			"count": count,
-			"tags":  tags,
-			"size":  formatSpace(size),
+			"count":  count,
+			"images": imageIds,
+			"tags":   tags,
+			"size":   formatSpace(size),
 		}).Info("Pruned tagged images")
 		return true
 	}
@@ -153,19 +156,22 @@ func pruneTempImages(ctx context.Context, cli *client.Client) bool {
 		log.WithField("err", err).Error("Error pruning temporary images", err)
 	} else if len(report.ImagesDeleted) > 0 {
 		count := 0
+		imageIds := []string{}
 		tags := []string{}
 		for _, item := range report.ImagesDeleted {
 			if item.Deleted != "" {
 				count++
+				imageIds = append(imageIds, imageIdDisplay(item.Deleted))
 			}
 			if item.Untagged != "" {
 				tags = append(tags, item.Untagged)
 			}
 		}
 		log.WithFields(log.Fields{
-			"count": count,
-			"tags":  tags,
-			"size":  formatSpace(report.SpaceReclaimed),
+			"count":  count,
+			"images": imageIds,
+			"tags":   tags,
+			"size":   formatSpace(report.SpaceReclaimed),
 		}).Info("Pruned temporary images")
 		return true
 	}
@@ -229,7 +235,7 @@ func isImageExpired(ctx context.Context, cli *client.Client, id string) bool {
 }
 
 func updateImageChainExpireTime(ctx context.Context, cli *client.Client, leafIds []string) error {
-	images := []string{}
+	imageIds := []string{}
 	tags := []string{}
 	for _, leafId := range unique(leafIds) {
 		chain, err := getImageChain(ctx, cli, leafId)
@@ -238,12 +244,12 @@ func updateImageChainExpireTime(ctx context.Context, cli *client.Client, leafIds
 		}
 		for _, item := range chain {
 			updateImageExpireTime(item.id)
-			images = append(images, imageIdDisplay(item.id))
+			imageIds = append(imageIds, imageIdDisplay(item.id))
 			tags = append(tags, item.tags...)
 		}
 	}
 	log.WithFields(log.Fields{
-		"images": unique(images),
+		"images": unique(imageIds),
 		"tags":   unique(tags),
 		"expire": (time.Now().Add(*taggedImageExpireTime)).Format(time.RFC3339),
 	}).Info("Updated image expiration")
