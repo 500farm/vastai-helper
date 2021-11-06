@@ -18,7 +18,7 @@ func selfTest(ctx context.Context, cli *client.Client) error {
 
 	resp, err := cli.ContainerCreate(ctx,
 		&container.Config{
-			Image: "sergeycheperis/vastai-ipv6-self-test",
+			Image: "500farm/vastai-ipv6-self-test",
 			Tty:   isTty,
 		},
 		nil, nil, nil, "self-test",

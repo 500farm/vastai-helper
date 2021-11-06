@@ -266,6 +266,7 @@ func startWebServer() {
 
 func (c *ContainerInfo) isMiningImage() bool {
 	return strings.HasPrefix(c.Image, "sergeycheperis/docker-ethminer")
+		|| strings.HasPrefix(c.Image, "500farm/docker-ethminer")
 }
 
 func (c *ContainerInfo) shouldExpose() bool {
