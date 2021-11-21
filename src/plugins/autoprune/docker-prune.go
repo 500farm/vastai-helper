@@ -14,10 +14,22 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// FIXME global var is bad bad
-var pruneStateDir string
+type AutoPruner struct {
+	ctx      context.Context
+	cli      *client.Client
+	stateDir string
+}
 
-func dockerPruneLoop(ctx context.Context, cli *client.Client) {
+func newAutoPruner(ctx context.Context, cli *client.Client, stateDir string) *AutoPruner {
+	return &AutoPruner{
+		ctx:      ctx,
+		cli:      cli,
+		stateDir: stateDir,
+	}
+}
+
+func (p *AutoPruner) loop() {
+	os.MkdirAll(p.stateDir, 0700)
 	time.Sleep(time.Minute)
 	for {
 		log.WithFields(log.Fields{
@@ -25,10 +37,10 @@ func dockerPruneLoop(ctx context.Context, cli *client.Client) {
 			"tagged-image-expire-time": *taggedImageExpireTime,
 			"interval":                 *pruneInterval,
 		}).Info("Doing auto-prune")
-		ok1 := pruneContainers(ctx, cli)
-		ok2 := pruneImages(ctx, cli)
-		ok3 := pruneTempImages(ctx, cli)
-		ok4 := pruneBuildCache(ctx, cli)
+		ok1 := p.pruneContainers()
+		ok2 := p.pruneImages()
+		ok3 := p.pruneTempImages()
+		ok4 := p.pruneBuildCache()
 		if !ok1 && !ok2 && !ok3 && !ok4 {
 			log.Info("Nothing to prune")
 		}
@@ -36,8 +48,8 @@ func dockerPruneLoop(ctx context.Context, cli *client.Client) {
 	}
 }
 
-func pruneContainers(ctx context.Context, cli *client.Client) bool {
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
+func (p *AutoPruner) pruneContainers() bool {
+	containers, err := p.cli.ContainerList(p.ctx, types.ContainerListOptions{
 		All: true,
 		Filters: filters.NewArgs(
 			filters.Arg("status", "created"),
@@ -60,7 +72,7 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 				"cid":   container.ID[:12],
 				"cname": cname,
 			})
-			info, err := cli.ContainerInspect(ctx, container.ID)
+			info, err := p.cli.ContainerInspect(p.ctx, container.ID)
 			if err != nil {
 				logger.WithField("err", err).Error("Error inspecting container")
 				continue
@@ -75,7 +87,7 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 
 			age := time.Since(finishTs).Round(time.Second)
 			if age > *expireTime {
-				err := cli.ContainerRemove(ctx, info.ID, types.ContainerRemoveOptions{})
+				err := p.cli.ContainerRemove(p.ctx, info.ID, types.ContainerRemoveOptions{})
 				if err != nil {
 					logger.WithField("err", err).Error("Error removing container")
 				} else {
@@ -96,8 +108,8 @@ func pruneContainers(ctx context.Context, cli *client.Client) bool {
 	return false
 }
 
-func pruneImages(ctx context.Context, cli *client.Client) bool {
-	images, err := cli.ImageList(ctx, types.ImageListOptions{})
+func (p *AutoPruner) pruneImages() bool {
+	images, err := p.cli.ImageList(p.ctx, types.ImageListOptions{})
 	if err != nil {
 		log.WithField("err", err).Error("Error listing images")
 		return false
@@ -113,13 +125,13 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 		if len(image.RepoTags) == 0 { // consider only tagged images
 			continue
 		}
-		if isImageUsed(ctx, cli, image.ID) { // for used image, update expiration
+		if p.isImageUsed(image.ID) { // for used image, update expiration
 			update = append(update, image.ID)
 			continue
 		}
 		// unused and tagged image
-		if isImageExpired(ctx, cli, image.ID) {
-			_, err := cli.ImageRemove(ctx, image.ID, types.ImageRemoveOptions{})
+		if p.isImageExpired(image.ID) {
+			_, err := p.cli.ImageRemove(p.ctx, image.ID, types.ImageRemoveOptions{})
 			if err != nil {
 				log.WithFields(log.Fields{
 					"image": imageIdDisplay(image.ID),
@@ -145,13 +157,13 @@ func pruneImages(ctx context.Context, cli *client.Client) bool {
 		return true
 	}
 	if len(update) > 0 {
-		updateImageChainExpireTime(ctx, cli, update)
+		p.updateImageChainExpireTime(update)
 	}
 	return false
 }
 
-func pruneTempImages(ctx context.Context, cli *client.Client) bool {
-	report, err := cli.ImagesPrune(ctx, filters.NewArgs(
+func (p *AutoPruner) pruneTempImages() bool {
+	report, err := p.cli.ImagesPrune(p.ctx, filters.NewArgs(
 		filters.Arg("until", (*expireTime).String()),
 		filters.Arg("dangling", "true"),
 	))
@@ -181,8 +193,8 @@ func pruneTempImages(ctx context.Context, cli *client.Client) bool {
 	return false
 }
 
-func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
-	report, err := cli.BuildCachePrune(ctx, types.BuildCachePruneOptions{
+func (p *AutoPruner) pruneBuildCache() bool {
+	report, err := p.cli.BuildCachePrune(p.ctx, types.BuildCachePruneOptions{
 		All:     true,
 		Filters: filters.NewArgs(filters.Arg("until", (*expireTime).String())),
 	})
@@ -198,19 +210,8 @@ func pruneBuildCache(ctx context.Context, cli *client.Client) bool {
 	return false
 }
 
-func formatSpace(bytes uint64) string {
-	return fmt.Sprintf("%.2f MiB", float64(bytes/1024/1024))
-}
-
-func imageIdDisplay(id string) string {
-	if id == "" {
-		return ""
-	}
-	return strings.TrimPrefix(id, "sha256:")[:12]
-}
-
-func isImageUsed(ctx context.Context, cli *client.Client, id string) bool {
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
+func (p *AutoPruner) isImageUsed(id string) bool {
+	containers, err := p.cli.ContainerList(p.ctx, types.ContainerListOptions{
 		All:    true,
 		Latest: true,
 		Filters: filters.NewArgs(
@@ -224,8 +225,8 @@ func isImageUsed(ctx context.Context, cli *client.Client, id string) bool {
 	return len(containers) > 0
 }
 
-func isImageExpired(ctx context.Context, cli *client.Client, id string) bool {
-	str, err := ioutil.ReadFile(pruneStateDir + "expire_" + id)
+func (p *AutoPruner) isImageExpired(id string) bool {
+	str, err := ioutil.ReadFile(p.stateDir + "expire_" + id)
 	if err == nil {
 		expire, err := time.Parse(time.RFC3339, string(str))
 		if err == nil {
@@ -233,20 +234,20 @@ func isImageExpired(ctx context.Context, cli *client.Client, id string) bool {
 		}
 	}
 	// if no time recorded, initialize it
-	updateImageChainExpireTime(ctx, cli, []string{id})
+	p.updateImageChainExpireTime([]string{id})
 	return false
 }
 
-func updateImageChainExpireTime(ctx context.Context, cli *client.Client, leafIds []string) error {
+func (p *AutoPruner) updateImageChainExpireTime(leafIds []string) error {
 	imageIds := []string{}
 	tags := []string{}
 	for _, leafId := range unique(leafIds) {
-		chain, err := getImageChain(ctx, cli, leafId)
+		chain, err := p.getImageChain(leafId)
 		if err != nil {
 			continue
 		}
 		for _, item := range chain {
-			updateImageExpireTime(item.id)
+			p.updateImageExpireTime(item.id)
 			imageIds = append(imageIds, imageIdDisplay(item.id))
 			tags = append(tags, item.tags...)
 		}
@@ -264,9 +265,9 @@ type ImageChainItem struct {
 	tags []string
 }
 
-func getImageChain(ctx context.Context, cli *client.Client, id string) ([]ImageChainItem, error) {
+func (p *AutoPruner) getImageChain(id string) ([]ImageChainItem, error) {
 	result := []ImageChainItem{}
-	history, err := cli.ImageHistory(ctx, id)
+	history, err := p.cli.ImageHistory(p.ctx, id)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"err":   err,
@@ -282,11 +283,22 @@ func getImageChain(ctx context.Context, cli *client.Client, id string) ([]ImageC
 	return result, nil
 }
 
-func updateImageExpireTime(id string) {
+func (p *AutoPruner) updateImageExpireTime(id string) {
 	t := time.Now().Add(*taggedImageExpireTime)
-	ioutil.WriteFile(pruneStateDir+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
+	ioutil.WriteFile(p.stateDir+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
 }
 
-func removeImageExpireTime(id string) {
-	os.Remove(pruneStateDir + "expire_" + id)
+func (p *AutoPruner) removeImageExpireTime(id string) {
+	os.Remove(p.stateDir + "expire_" + id)
+}
+
+func formatSpace(bytes uint64) string {
+	return fmt.Sprintf("%.2f MiB", float64(bytes/1024/1024))
+}
+
+func imageIdDisplay(id string) string {
+	if id == "" {
+		return ""
+	}
+	return strings.TrimPrefix(id, "sha256:")[:12]
 }

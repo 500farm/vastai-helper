@@ -2,7 +2,6 @@ package autoprune
 
 import (
 	"context"
-	"os"
 
 	"github.com/docker/docker/client"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -24,23 +23,21 @@ var (
 )
 
 type AutoPrunePlugin struct {
-	ctx      context.Context
-	cli      *client.Client
-	stateDir string
+	ctx    context.Context
+	cli    *client.Client
+	pruner *AutoPruner
 }
 
 func NewPlugin(ctx context.Context, cli *client.Client, stateDir string) *AutoPrunePlugin {
 	return &AutoPrunePlugin{
-		ctx:      ctx,
-		cli:      cli,
-		stateDir: stateDir + "prune/",
+		ctx:    ctx,
+		cli:    cli,
+		pruner: newAutoPruner(ctx, cli, stateDir+"prune/"),
 	}
 }
 
 func (p *AutoPrunePlugin) Start() error {
-	pruneStateDir = p.stateDir
-	os.MkdirAll(p.stateDir, 0700)
-	go dockerPruneLoop(p.ctx, p.cli)
+	go p.pruner.loop()
 	return nil
 }
 
@@ -49,7 +46,7 @@ func (p *AutoPrunePlugin) ContainerCreated(cid string, cname string, image strin
 }
 
 func (p *AutoPrunePlugin) ContainerDestroyed(cid string, cname string, image string) error {
-	return updateImageChainExpireTime(p.ctx, p.cli, []string{image})
+	return p.pruner.updateImageChainExpireTime([]string{image})
 }
 
 func (p *AutoPrunePlugin) ContainerStarted(cid string, cname string, image string) error {
@@ -61,6 +58,6 @@ func (p *AutoPrunePlugin) ContainerStopped(cid string, cname string, image strin
 }
 
 func (p *AutoPrunePlugin) ImageRemoved(image string) error {
-	removeImageExpireTime(image)
+	p.pruner.removeImageExpireTime(image)
 	return nil
 }
