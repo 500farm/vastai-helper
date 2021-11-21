@@ -22,7 +22,7 @@ func dhcpLeaseV4(ctx context.Context, ifname string, clientId []byte, hostName s
 		Info("DHCPv4 request")
 
 	opts := []nclient4.ClientOpt{}
-	if *debug {
+	if dhcpDebug {
 		opts = append(opts, nclient4.WithDebugLogger())
 	}
 	client, err := nclient4.New(ifname, opts...)

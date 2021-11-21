@@ -19,7 +19,7 @@ func dhcpNetConfV4(ctx context.Context, ifname string) (NetConf, error) {
 	log.WithFields(log.Fields{"ifname": iface.Name}).Info("DHCPv4 discover")
 
 	opts := []nclient4.ClientOpt{}
-	if *debug {
+	if dhcpDebug {
 		opts = append(opts, nclient4.WithDebugLogger())
 	}
 	client, err := nclient4.New(ifname, opts...)

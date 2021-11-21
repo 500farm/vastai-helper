@@ -26,7 +26,7 @@ func receiveConfWithDhcpV6(ctx context.Context, ifname string, sharedPrefix bool
 	nclient6.AllDHCPRelayAgentsAndServers.Zone = ifname
 
 	opts := []nclient6.ClientOpt{}
-	if *debug {
+	if dhcpDebug {
 		opts = append(opts, nclient6.WithDebugLogger())
 	}
 	client, err := nclient6.New(ifname, opts...)

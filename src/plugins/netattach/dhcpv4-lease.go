@@ -107,7 +107,7 @@ func (lease DhcpLeaseV4) renewIfNeeded(ctx context.Context) (DhcpLeaseV4, error)
 
 func (lease DhcpLeaseV4) release(ctx context.Context) error {
 	opts := []nclient4.ClientOpt{}
-	if *debug {
+	if dhcpDebug {
 		opts = append(opts, nclient4.WithDebugLogger())
 	}
 	client, err := nclient4.New(lease.IfName, opts...)

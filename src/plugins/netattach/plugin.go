@@ -88,6 +88,8 @@ func (p *NetAttachPlugin) Start() error {
 		leaseStateDir = p.stateDir
 		os.MkdirAll(p.stateDir, 0700)
 
+		dhcpDebug = *debug
+
 		if netType == Bridge {
 			if *ipv6Prefix != "" {
 				netConfV6, err = staticNetConfV6(*ipv6Prefix, "")
