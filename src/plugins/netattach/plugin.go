@@ -1,4 +1,4 @@
-package plugin
+package netattach
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/docker/docker/client"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -40,23 +41,25 @@ var (
 )
 
 type NetAttachPlugin struct {
-	ctx     context.Context
-	cli     *client.Client
-	enabled bool
-	net     *DockerNet
+	ctx      context.Context
+	cli      *client.Client
+	enabled  bool
+	net      DockerNet
+	stateDir string
 }
 
-func NewPlugin(ctx context.Context, cli *client.Client) *NetAttachPlugin {
+func NewPlugin(ctx context.Context, cli *client.Client, stateDir string) *NetAttachPlugin {
 	return &NetAttachPlugin{
-		ctx: ctx,
-		cli: cli,
+		ctx:      ctx,
+		cli:      cli,
+		stateDir: stateDir + "lease/",
 	}
 }
 
 func (p *NetAttachPlugin) Start() error {
 	if *test {
 		// self-test mode
-		if err := selfTest(ctx, cli); err != nil {
+		if err := selfTest(p.ctx, p.cli); err != nil {
 			log.Fatal(err)
 		}
 		os.Exit(0)
@@ -82,11 +85,14 @@ func (p *NetAttachPlugin) Start() error {
 		var netConfV6, netConfV4 NetConf
 		var err error
 
+		leaseStateDir = p.stateDir
+		os.MkdirAll(p.stateDir, 0700)
+
 		if netType == Bridge {
 			if *ipv6Prefix != "" {
 				netConfV6, err = staticNetConfV6(*ipv6Prefix, "")
 			} else {
-				netConfV6, err = dhcpNetConfV6(ctx, *netInterface, false)
+				netConfV6, err = dhcpNetConfV6(p.ctx, *netInterface, false)
 			}
 			if err != nil {
 				log.Fatal(err)
@@ -102,29 +108,31 @@ func (p *NetAttachPlugin) Start() error {
 			if err != nil {
 				log.Fatal(err)
 			}
-			netConfV4, err = dhcpNetConfV4(ctx, *netInterface)
+			netConfV4, err = dhcpNetConfV4(p.ctx, *netInterface)
 			if err != nil {
 				log.Fatal(err)
 			}
-			go dhcpRenewLoopV4(ctx)
+			go dhcpRenewLoopV4(p.ctx)
 		}
 
 		netConf := mergeNetConf(netConfV4, netConfV6, netType)
 		log.WithFields(netConf.logFields()).Info("Detected network configuration")
 
-		p.net, err = selectOrCreateDockerNet(ctx, cli, &netConf)
+		p.net, err = selectOrCreateDockerNet(p.ctx, p.cli, &netConf)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		p.enabled = true
 	}
+
+	return nil
 }
 
 func (p *NetAttachPlugin) ContainerCreated(cid string, cname string, image string) error {
 	if p.enabled &&
 		shouldAttachContainer(cname, image) {
-		return attachContainerToNet(ctx, cli, &Attachment{cid: cid, cname: cname, net: p.net})
+		return attachContainerToNet(p.ctx, p.cli, &Attachment{cid: cid, cname: cname, net: &p.net})
 	}
 	return nil
 }
@@ -132,7 +140,7 @@ func (p *NetAttachPlugin) ContainerCreated(cid string, cname string, image strin
 func (p *NetAttachPlugin) ContainerDestroyed(cid string, cname string, image string) error {
 	if p.enabled &&
 		shouldAttachContainer(cname, image) {
-		return detachContainerFromNet(ctx, cli, &Attachment{cid: cid, cname: cname, net: p.net})
+		return detachContainerFromNet(p.ctx, p.cli, &Attachment{cid: cid, cname: cname, net: &p.net})
 	}
 	return nil
 }
@@ -141,7 +149,7 @@ func (p *NetAttachPlugin) ContainerStarted(cid string, cname string, image strin
 	if p.enabled &&
 		shouldAttachContainer(cname, image) &&
 		p.net.driver == "bridge" {
-		return routePorts(ctx, cli, &Attachment{cid: cid, cname: cname, net: p.net})
+		return routePorts(p.ctx, p.cli, &Attachment{cid: cid, cname: cname, net: &p.net})
 	}
 	return nil
 }
@@ -150,7 +158,7 @@ func (p *NetAttachPlugin) ContainerStopped(cid string, cname string, image strin
 	if p.enabled &&
 		shouldAttachContainer(cname, image) &&
 		p.net.driver == "bridge" {
-		return unroutePorts(ctx, cli, &Attachment{cid: cid, cname: cname, net: p.net})
+		return unroutePorts(p.ctx, p.cli, &Attachment{cid: cid, cname: cname, net: &p.net})
 	}
 	return nil
 }

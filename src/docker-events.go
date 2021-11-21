@@ -116,11 +116,13 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 	}
 
 	if event.Type == "image" {
+		logger := log.WithFields(log.Fields{
+			"event": event.Action,
+			"image": event.Actor.ID,
+		})
+
 		if event.Action == "pull" {
-			log.WithFields(log.Fields{
-				"event": "pull",
-				"image": event.Actor.ID,
-			}).Info("Docker image pulled")
+			logger.Info("Docker image pulled")
 
 		} else if event.Action == "delete" {
 			// plugin call
@@ -131,7 +133,7 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 	}
 }
 
-func callPlugin(f func(p Plugin, logger *log.Entry) error) {
+func callPlugin(f func(p Plugin) error, logger *log.Entry) {
 	for _, p := range plugins {
 		err := f(p)
 		if err != nil {

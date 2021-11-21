@@ -1,4 +1,4 @@
-package main
+package autoprune
 
 func unique(data []string) []string {
 	m := make(map[string]bool)

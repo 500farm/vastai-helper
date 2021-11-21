@@ -1,4 +1,4 @@
-package plugin
+package netattach
 
 import (
 	"context"
@@ -23,6 +23,9 @@ type DhcpLeaseV4 struct {
 	Renewed    time.Time
 }
 
+// FIXME global var is bad bad
+var leaseStateDir string
+
 func newLease(ifname string, clientId []byte, hostName string, lease *nclient4.Lease) DhcpLeaseV4 {
 	ttl := lease.ACK.IPAddressLeaseTime(time.Hour)
 	return DhcpLeaseV4{
@@ -41,7 +44,7 @@ func loadLease(clientId []byte) (DhcpLeaseV4, error) {
 
 func loadAllLeases() ([]DhcpLeaseV4, error) {
 	result := []DhcpLeaseV4{}
-	dir := leaseStateDir()
+	dir := leaseStateDir
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return result, err
@@ -146,10 +149,6 @@ func (lease DhcpLeaseV4) logFields() log.Fields {
 	}
 }
 
-func leaseStateDir() string {
-	return stateDir() + "lease/"
-}
-
 func leaseStateFile(clientId []byte) string {
-	return leaseStateDir() + hex.EncodeToString(clientId) + ".json"
+	return leaseStateDir + hex.EncodeToString(clientId) + ".json"
 }

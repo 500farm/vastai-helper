@@ -1,4 +1,4 @@
-package plugin
+package autoprune
 
 import (
 	"context"
@@ -14,8 +14,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// FIXME global var is bad bad
+var pruneStateDir string
+
 func dockerPruneLoop(ctx context.Context, cli *client.Client) {
-	os.MkdirAll(pruneStateDir(), 0700)
 	time.Sleep(time.Minute)
 	for {
 		log.WithFields(log.Fields{
@@ -223,7 +225,7 @@ func isImageUsed(ctx context.Context, cli *client.Client, id string) bool {
 }
 
 func isImageExpired(ctx context.Context, cli *client.Client, id string) bool {
-	str, err := ioutil.ReadFile(pruneStateDir() + "expire_" + id)
+	str, err := ioutil.ReadFile(pruneStateDir + "expire_" + id)
 	if err == nil {
 		expire, err := time.Parse(time.RFC3339, string(str))
 		if err == nil {
@@ -282,13 +284,9 @@ func getImageChain(ctx context.Context, cli *client.Client, id string) ([]ImageC
 
 func updateImageExpireTime(id string) {
 	t := time.Now().Add(*taggedImageExpireTime)
-	ioutil.WriteFile(pruneStateDir()+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
+	ioutil.WriteFile(pruneStateDir+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
 }
 
 func removeImageExpireTime(id string) {
-	os.Remove(pruneStateDir() + "expire_" + id)
-}
-
-func pruneStateDir() string {
-	return stateDir() + "prune/"
+	os.Remove(pruneStateDir + "expire_" + id)
 }

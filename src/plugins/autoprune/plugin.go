@@ -1,7 +1,8 @@
-package plugin
+package autoprune
 
 import (
 	"context"
+	"os"
 
 	"github.com/docker/docker/client"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -23,18 +24,22 @@ var (
 )
 
 type AutoPrunePlugin struct {
-	ctx context.Context
-	cli *client.Client
+	ctx      context.Context
+	cli      *client.Client
+	stateDir string
 }
 
-func NewPlugin(ctx context.Context, cli *client.Client) *AutoPrunePlugin {
+func NewPlugin(ctx context.Context, cli *client.Client, stateDir string) *AutoPrunePlugin {
 	return &AutoPrunePlugin{
-		ctx: ctx,
-		cli: cli,
+		ctx:      ctx,
+		cli:      cli,
+		stateDir: stateDir + "prune/",
 	}
 }
 
 func (p *AutoPrunePlugin) Start() error {
+	pruneStateDir = p.stateDir
+	os.MkdirAll(p.stateDir, 0700)
 	go dockerPruneLoop(p.ctx, p.cli)
 	return nil
 }

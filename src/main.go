@@ -8,9 +8,9 @@ import (
 	"github.com/docker/docker/client"
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	apiPlugin "./plugins/api"
-	autoPrunePlugin "./plugins/auto-prune"
-	netAttachPlugin "./plugins/net-attach"
+	apiPlugin "vastai-helper/src/plugins/api"
+	autoPrunePlugin "vastai-helper/src/plugins/autoprune"
+	netAttachPlugin "vastai-helper/src/plugins/netattach"
 )
 
 func createDockerClient() *client.Client {
@@ -29,11 +29,12 @@ func main() {
 
 	cli := createDockerClient()
 	ctx := context.Background()
+	stateDir := "/var/lib/vastai-helper/"
 
 	plugins = []Plugin{
-		autoPrunePlugin.NewAutoPrunePlugin(ctx, cli),
-		apiPlugin.NewApiPlugin(ctx, cli),
-		netAttachPlugin.NewNetAttachPlugin(ctx, cli),
+		autoPrunePlugin.NewPlugin(ctx, cli, stateDir),
+		apiPlugin.NewPlugin(ctx, cli),
+		netAttachPlugin.NewPlugin(ctx, cli, stateDir),
 	}
 
 	for _, plugin := range plugins {
