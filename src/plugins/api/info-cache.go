@@ -1,11 +1,10 @@
-package main
+package plugin
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"sort"
@@ -50,8 +49,6 @@ type InfoCache struct {
 
 	cachedJson []byte // internal
 }
-
-var infoCache InfoCache
 
 func (c *InfoCache) load(ctx context.Context, cli *client.Client) error {
 	c.HostName, _ = os.Hostname()
@@ -170,9 +167,10 @@ func (c *InfoCache) updateContainerInfo(ctx context.Context, cli *client.Client,
 	return nil
 }
 
-func (c *InfoCache) deleteContainerInfo(cid string) {
+func (c *InfoCache) deleteContainerInfo(cid string) error {
 	c._deleteContainerInfo(cid)
 	c.afterUpdate()
+	return nil
 }
 
 func (c *InfoCache) _deleteContainerInfo(cid string) {
@@ -242,26 +240,6 @@ func (c *InfoCache) generateJson() []byte {
 		result = []byte("{}")
 	}
 	return result
-}
-
-func (c *InfoCache) start(ctx context.Context, cli *client.Client) error {
-	if err := c.load(ctx, cli); err != nil {
-		return err
-	}
-	go startWebServer()
-	return nil
-}
-
-func startWebServer() {
-	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(infoCache.json())
-	})
-	logger := log.WithFields(log.Fields{"bind": *webServerBind})
-	logger.Info("Starting web server")
-	if err := http.ListenAndServe(*webServerBind, nil); err != nil {
-		logger.Error(err)
-	}
 }
 
 func (c *ContainerInfo) isMiningImage() bool {

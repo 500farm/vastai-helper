@@ -1,4 +1,4 @@
-package main
+package plugin
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 )
 
 func dockerPruneLoop(ctx context.Context, cli *client.Client) {
+	os.MkdirAll(pruneStateDir(), 0700)
 	time.Sleep(time.Minute)
 	for {
 		log.WithFields(log.Fields{

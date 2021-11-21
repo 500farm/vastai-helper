@@ -14,7 +14,7 @@ import (
 	"github.com/docker/docker/client"
 )
 
-func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
+func dockerEventLoop(ctx context.Context, cli *client.Client) {
 	retry := 5 * time.Second
 
 	for {
@@ -33,12 +33,6 @@ func dockerEventLoop(ctx context.Context, cli *client.Client, net *DockerNet) {
 			select {
 			case event := <-eventChan:
 				processEvent(ctx, cli, &event)
-				if net != nil {
-					err := processEventWithNet(ctx, cli, &event, net)
-					if err != nil {
-						log.Error(err)
-					}
-				}
 			case err := <-errChan:
 				log.WithFields(log.Fields{"retry": retry}).Error("Error reading docker events: ", err)
 				quit = true
@@ -74,9 +68,17 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 
 		if event.Action == "create" {
 			logger.Info("Container created")
+			// plugin call
+			callPlugin(func(p Plugin) error {
+				return p.ContainerCreated(cid, cname, image)
+			}, logger)
 
 		} else if event.Action == "start" {
 			logger.Info("Container started")
+			// plugin call
+			callPlugin(func(p Plugin) error {
+				return p.ContainerStarted(cid, cname, image)
+			}, logger)
 
 		} else if event.Action == "die" {
 			exitCode, _ := strconv.Atoi(event.Actor.Attributes["exitCode"])
@@ -91,13 +93,17 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 					WithFields(log.Fields{"exitCode": exitCode}).
 					Warn("Container exited with error")
 			}
+			// plugin call
+			callPlugin(func(p Plugin) error {
+				return p.ContainerStopped(cid, cname, image)
+			}, logger)
 
 		} else if event.Action == "destroy" {
 			logger.Info("Container destroyed")
-			err := updateImageChainExpireTime(ctx, cli, []string{image})
-			if err != nil {
-				logger.Error(err)
-			}
+			// plugin call
+			callPlugin(func(p Plugin) error {
+				return p.ContainerDestroyed(cid, cname, image)
+			}, logger)
 
 		} else if strings.HasPrefix(event.Action, "exec_start: ") {
 			logger.
@@ -106,17 +112,6 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 
 		} else if event.Action == "oom" {
 			logger.Warn("Container triggered OOM")
-		}
-
-		if shouldCacheContainerInfo(cname, image) {
-			if event.Action == "create" || event.Action == "start" || event.Action == "die" {
-				err := infoCache.updateContainerInfo(ctx, cli, cid)
-				if err != nil {
-					logger.Error(err)
-				}
-			} else if event.Action == "destroy" {
-				infoCache.deleteContainerInfo(cid)
-			}
 		}
 	}
 
@@ -128,56 +123,19 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			}).Info("Docker image pulled")
 
 		} else if event.Action == "delete" {
-			removeImageExpireTime(event.Actor.ID)
+			// plugin call
+			callPlugin(func(p Plugin) error {
+				return p.ImageRemoved(event.Actor.ID)
+			}, logger)
 		}
 	}
 }
 
-func processEventWithNet(ctx context.Context, cli *client.Client, event *events.Message, net *DockerNet) error {
-	if event.Type != "container" {
-		return nil
-	}
-	cid := event.Actor.ID
-	if cid == "" {
-		return nil
-	}
-	cname := event.Actor.Attributes["name"]
-	image := event.Actor.Attributes["image"]
-	if strings.HasPrefix(image, "sha256:") {
-		// ignore temporary containers
-		return nil
-	}
-	if !shouldAttachContainer(cname, image) {
-		return nil
-	}
-	att := Attachment{
-		cid:   cid,
-		cname: cname,
-		net:   net,
-	}
-	if event.Action == "create" {
-		return attachContainerToNet(ctx, cli, &att)
-	}
-	if event.Action == "destroy" {
-		return detachContainerFromNet(ctx, cli, &att)
-	}
-	if event.Action == "start" {
-		if net.driver == "bridge" {
-			return routePorts(ctx, cli, &att)
+func callPlugin(f func(p Plugin, logger *log.Entry) error) {
+	for _, p := range plugins {
+		err := f(p)
+		if err != nil {
+			logger.Error(err)
 		}
-		return nil
 	}
-	if event.Action == "die" {
-		if net.driver == "bridge" {
-			return unroutePorts(ctx, cli, &att)
-		}
-		return nil
-	}
-
-	return nil
-}
-
-func shouldAttachContainer(cname string, image string) bool {
-	// temporarily exclude vast.ai containers and promtail
-	return !strings.HasPrefix(cname, "C.") && cname != "promtail"
 }
