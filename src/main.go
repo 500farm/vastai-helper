@@ -37,6 +37,9 @@ func main() {
 		netAttachPlugin.NewPlugin(ctx, cli, stateDir),
 	}
 
+	if err := discoverContainers(ctx, cli); err != nil {
+		log.Fatal(err)
+	}
 	for _, plugin := range plugins {
 		if err := plugin.Start(); err != nil {
 			log.Fatal(err)

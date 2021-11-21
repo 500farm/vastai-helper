@@ -56,6 +56,10 @@ func NewPlugin(ctx context.Context, cli *client.Client, stateDir string) *NetAtt
 	}
 }
 
+func (p *NetAttachPlugin) ContainerDiscovered(cid string, cname string, image string) error {
+	return nil
+}
+
 func (p *NetAttachPlugin) Start() error {
 	if *test {
 		// self-test mode

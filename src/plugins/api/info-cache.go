@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/docker/go-units"
@@ -47,36 +46,19 @@ type InfoCache struct {
 	GpuStatus  []string // idle / mining / busy
 	Containers []ContainerInfo
 
-	cachedJson []byte // internal
+	ctx        context.Context
+	cli        *client.Client
+	cachedJson []byte
 }
 
-func (c *InfoCache) load(ctx context.Context, cli *client.Client) error {
-	c.HostName, _ = os.Hostname()
-	c.NumGpus = getNumGpus()
-	return c.update(ctx, cli)
-}
-
-func (c *InfoCache) update(ctx context.Context, cli *client.Client) error {
-	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
-		All: true,
-	})
-	if err != nil {
-		return err
+func newInfoCache(ctx context.Context, cli *client.Client) *InfoCache {
+	hostName, _ := os.Hostname()
+	return &InfoCache{
+		HostName: hostName,
+		NumGpus:  getNumGpus(),
+		ctx:      ctx,
+		cli:      cli,
 	}
-	c.Containers = make([]ContainerInfo, 0, len(containers))
-	for _, container := range containers {
-		if !shouldCacheContainerInfo(container.Names[0], container.Image) {
-			continue
-		}
-		inst, err := getContainerInfo(ctx, cli, container.ID)
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-		c.Containers = append(c.Containers, inst)
-	}
-	c.afterUpdate()
-	return nil
 }
 
 func getNumGpus() int {
@@ -89,8 +71,8 @@ func getNumGpus() int {
 	return strings.Count(string(out), "\n")
 }
 
-func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (ContainerInfo, error) {
-	ctJson, err := cli.ContainerInspect(ctx, cid)
+func (c *InfoCache) getContainerInfo(cid string) (ContainerInfo, error) {
+	ctJson, err := c.cli.ContainerInspect(c.ctx, cid)
 	if err != nil {
 		return ContainerInfo{}, err
 	}
@@ -107,7 +89,7 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Cont
 		Status:  ctJson.State.Status,
 	}
 	if !shouldCacheContainerInfo(name, inst.Image) {
-		return ContainerInfo{}, fmt.Errorf("Container %s (%s) should not be cached", name, inst.Image)
+		return ContainerInfo{}, fmt.Errorf("container %s (%s) should not be cached", name, inst.Image)
 	}
 
 	inst.Created, _ = time.Parse(time.RFC3339Nano, ctJson.Created)
@@ -156,13 +138,15 @@ func getContainerInfo(ctx context.Context, cli *client.Client, cid string) (Cont
 	return inst, nil
 }
 
-func (c *InfoCache) updateContainerInfo(ctx context.Context, cli *client.Client, cid string) error {
-	newInst, err := getContainerInfo(ctx, cli, cid)
-	if err != nil {
-		return err
+func (c *InfoCache) updateContainerInfo(cids []string) error {
+	for _, cid := range cids {
+		newInst, err := c.getContainerInfo(cid)
+		if err != nil {
+			return err
+		}
+		c._deleteContainerInfo(cid)
+		c.Containers = append(c.Containers, newInst)
 	}
-	c._deleteContainerInfo(cid)
-	c.Containers = append(c.Containers, newInst)
 	c.afterUpdate()
 	return nil
 }
@@ -265,8 +249,4 @@ func (c *ContainerInfo) statusOrder() int {
 		return 3
 	}
 	return 4
-}
-
-func shouldCacheContainerInfo(cname string, image string) bool {
-	return strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")
 }

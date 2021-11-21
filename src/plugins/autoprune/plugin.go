@@ -36,6 +36,10 @@ func NewPlugin(ctx context.Context, cli *client.Client, stateDir string) *AutoPr
 	}
 }
 
+func (p *AutoPrunePlugin) ContainerDiscovered(cid string, cname string, image string) error {
+	return nil
+}
+
 func (p *AutoPrunePlugin) Start() error {
 	go p.pruner.loop()
 	return nil

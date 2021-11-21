@@ -42,7 +42,7 @@ func dockerEventLoop(ctx context.Context, cli *client.Client) {
 		cancel()
 		time.Sleep(5 * time.Second)
 
-		// TODO reload InfoCache because events could have been missed
+		// TODO redo container discover because events could have been missed
 		// TODO or better use the --since filter?
 	}
 }
@@ -131,6 +131,31 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 			}, logger)
 		}
 	}
+}
+
+func discoverContainers(ctx context.Context, cli *client.Client) error {
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{
+		All: true,
+	})
+	if err != nil {
+		return err
+	}
+	for _, container := range containers {
+		cid := container.ID
+		cname := strings.TrimLeft(container.Names[0], "/")
+		image := container.Image
+		logger := log.WithFields(log.Fields{
+			"cid":   cid[0:12],
+			"cname": cname,
+			"image": image,
+		})
+		logger.Info("Container discovered")
+		callPlugin(func(p Plugin) error {
+			return p.ContainerDiscovered(cid, cname, image)
+		}, logger)
+	}
+	return nil
+
 }
 
 func callPlugin(f func(p Plugin) error, logger *log.Entry) {

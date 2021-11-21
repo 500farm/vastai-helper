@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
@@ -17,22 +18,33 @@ var (
 )
 
 type ApiPlugin struct {
-	ctx   context.Context
-	cli   *client.Client
-	cache InfoCache
+	ctx                  context.Context
+	cli                  *client.Client
+	cache                *InfoCache
+	discoveredContainers []string
 }
 
 func NewPlugin(ctx context.Context, cli *client.Client) *ApiPlugin {
 	return &ApiPlugin{
-		ctx: ctx,
-		cli: cli,
+		ctx:   ctx,
+		cli:   cli,
+		cache: newInfoCache(ctx, cli),
 	}
 }
 
+func (p *ApiPlugin) ContainerDiscovered(cid string, cname string, image string) error {
+	if shouldCacheContainerInfo(cname, image) {
+		p.discoveredContainers = append(p.discoveredContainers, cid)
+	}
+	return nil
+}
+
 func (p *ApiPlugin) Start() error {
-	if err := p.cache.load(p.ctx, p.cli); err != nil {
+	err := p.cache.updateContainerInfo(p.discoveredContainers)
+	if err != nil {
 		return err
 	}
+
 	go func() {
 		http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -44,25 +56,42 @@ func (p *ApiPlugin) Start() error {
 			logger.Error(err)
 		}
 	}()
+
 	return nil
 }
 
 func (p *ApiPlugin) ContainerCreated(cid string, cname string, image string) error {
-	return p.cache.updateContainerInfo(p.ctx, p.cli, cid)
+	if shouldCacheContainerInfo(cname, image) {
+		return p.cache.updateContainerInfo([]string{cid})
+	}
+	return nil
 }
 
 func (p *ApiPlugin) ContainerDestroyed(cid string, cname string, image string) error {
-	return p.cache.deleteContainerInfo(cid)
+	if shouldCacheContainerInfo(cname, image) {
+		return p.cache.deleteContainerInfo(cid)
+	}
+	return nil
 }
 
 func (p *ApiPlugin) ContainerStarted(cid string, cname string, image string) error {
-	return p.cache.updateContainerInfo(p.ctx, p.cli, cid)
+	if shouldCacheContainerInfo(cname, image) {
+		return p.cache.updateContainerInfo([]string{cid})
+	}
+	return nil
 }
 
 func (p *ApiPlugin) ContainerStopped(cid string, cname string, image string) error {
-	return p.cache.updateContainerInfo(p.ctx, p.cli, cid)
+	if shouldCacheContainerInfo(cname, image) {
+		return p.cache.updateContainerInfo([]string{cid})
+	}
+	return nil
 }
 
 func (p *ApiPlugin) ImageRemoved(image string) error {
 	return nil
+}
+
+func shouldCacheContainerInfo(cname string, image string) bool {
+	return strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")
 }
