@@ -55,8 +55,7 @@ func processEvent(ctx context.Context, cli *client.Client, event *events.Message
 		}
 		cname := event.Actor.Attributes["name"]
 		image := event.Actor.Attributes["image"]
-		if strings.HasPrefix(image, "sha256:") {
-			// ignore temporary containers
+		if !shouldWatchContainer(cname, image) {
 			return
 		}
 		logger := log.WithFields(log.Fields{
@@ -144,15 +143,17 @@ func discoverContainers(ctx context.Context, cli *client.Client) error {
 		cid := container.ID
 		cname := strings.TrimLeft(container.Names[0], "/")
 		image := container.Image
-		logger := log.WithFields(log.Fields{
-			"cid":   cid[0:12],
-			"cname": cname,
-			"image": image,
-		})
-		logger.Info("Container discovered")
-		callPlugin(func(p Plugin) error {
-			return p.ContainerDiscovered(cid, cname, image)
-		}, logger)
+		if shouldWatchContainer(cname, image) {
+			logger := log.WithFields(log.Fields{
+				"cid":   cid[0:12],
+				"cname": cname,
+				"image": image,
+			})
+			logger.Info("Container discovered")
+			callPlugin(func(p Plugin) error {
+				return p.ContainerDiscovered(cid, cname, image)
+			}, logger)
+		}
 	}
 	return nil
 
@@ -165,4 +166,9 @@ func callPlugin(f func(p Plugin) error, logger *log.Entry) {
 			logger.Error(err)
 		}
 	}
+}
+
+func shouldWatchContainer(cname, image) bool {
+	// ignore temporary containers
+	return !strings.HasPrefix(image, "sha256:")
 }
