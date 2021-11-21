@@ -30,9 +30,13 @@ type AutoPrunePlugin struct {
 
 func NewPlugin(ctx context.Context, cli *client.Client, stateDir string) *AutoPrunePlugin {
 	return &AutoPrunePlugin{
-		ctx:    ctx,
-		cli:    cli,
-		pruner: newAutoPruner(ctx, cli, stateDir+"prune/"),
+		ctx: ctx,
+		cli: cli,
+		pruner: newAutoPruner(ctx, cli, stateDir+"prune/", PruneSettings{
+			expireTime:            *expireTime,
+			taggedImageExpireTime: *taggedImageExpireTime,
+			pruneInterval:         *pruneInterval,
+		}),
 	}
 }
 

@@ -14,17 +14,25 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type PruneSettings struct {
+	expireTime            time.Duration
+	taggedImageExpireTime time.Duration
+	pruneInterval         time.Duration
+}
+
 type AutoPruner struct {
 	ctx      context.Context
 	cli      *client.Client
 	stateDir string
+	settings PruneSettings
 }
 
-func newAutoPruner(ctx context.Context, cli *client.Client, stateDir string) *AutoPruner {
+func newAutoPruner(ctx context.Context, cli *client.Client, stateDir string, settings PruneSettings) *AutoPruner {
 	return &AutoPruner{
 		ctx:      ctx,
 		cli:      cli,
 		stateDir: stateDir,
+		settings: settings,
 	}
 }
 
@@ -33,9 +41,9 @@ func (p *AutoPruner) loop() {
 	time.Sleep(time.Minute)
 	for {
 		log.WithFields(log.Fields{
-			"expire-time":              *expireTime,
-			"tagged-image-expire-time": *taggedImageExpireTime,
-			"interval":                 *pruneInterval,
+			"expire-time":              p.settings.expireTime,
+			"tagged-image-expire-time": p.settings.taggedImageExpireTime,
+			"interval":                 p.settings.pruneInterval,
 		}).Info("Doing auto-prune")
 		ok1 := p.pruneContainers()
 		ok2 := p.pruneImages()
@@ -44,7 +52,7 @@ func (p *AutoPruner) loop() {
 		if !ok1 && !ok2 && !ok3 && !ok4 {
 			log.Info("Nothing to prune")
 		}
-		time.Sleep(*pruneInterval)
+		time.Sleep(p.settings.pruneInterval)
 	}
 }
 
@@ -86,7 +94,7 @@ func (p *AutoPruner) pruneContainers() bool {
 			}
 
 			age := time.Since(finishTs).Round(time.Second)
-			if age > *expireTime {
+			if age > p.settings.expireTime {
 				err := p.cli.ContainerRemove(p.ctx, info.ID, types.ContainerRemoveOptions{})
 				if err != nil {
 					logger.WithField("err", err).Error("Error removing container")
@@ -164,7 +172,7 @@ func (p *AutoPruner) pruneImages() bool {
 
 func (p *AutoPruner) pruneTempImages() bool {
 	report, err := p.cli.ImagesPrune(p.ctx, filters.NewArgs(
-		filters.Arg("until", (*expireTime).String()),
+		filters.Arg("until", p.settings.expireTime.String()),
 		filters.Arg("dangling", "true"),
 	))
 	if err != nil {
@@ -196,7 +204,7 @@ func (p *AutoPruner) pruneTempImages() bool {
 func (p *AutoPruner) pruneBuildCache() bool {
 	report, err := p.cli.BuildCachePrune(p.ctx, types.BuildCachePruneOptions{
 		All:     true,
-		Filters: filters.NewArgs(filters.Arg("until", (*expireTime).String())),
+		Filters: filters.NewArgs(filters.Arg("until", p.settings.expireTime.String())),
 	})
 	if err != nil {
 		log.WithField("err", err).Error("Error pruning build cache", err)
@@ -255,7 +263,7 @@ func (p *AutoPruner) updateImageChainExpireTime(leafIds []string) error {
 	log.WithFields(log.Fields{
 		"images": unique(imageIds),
 		"tags":   unique(tags),
-		"expire": (time.Now().Add(*taggedImageExpireTime)).Format(time.RFC3339),
+		"expire": (time.Now().Add(p.settings.taggedImageExpireTime)).Format(time.RFC3339),
 	}).Info("Updated image expiration")
 	return nil
 }
@@ -284,7 +292,7 @@ func (p *AutoPruner) getImageChain(id string) ([]ImageChainItem, error) {
 }
 
 func (p *AutoPruner) updateImageExpireTime(id string) {
-	t := time.Now().Add(*taggedImageExpireTime)
+	t := time.Now().Add(p.settings.taggedImageExpireTime)
 	ioutil.WriteFile(p.stateDir+"expire_"+id, []byte(t.Format(time.RFC3339)), 0600)
 }
 
