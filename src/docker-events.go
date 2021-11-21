@@ -168,7 +168,7 @@ func callPlugin(f func(p Plugin) error, logger *log.Entry) {
 	}
 }
 
-func shouldWatchContainer(cname, image) bool {
+func shouldWatchContainer(cname string, image string) bool {
 	// ignore temporary containers
 	return !strings.HasPrefix(image, "sha256:")
 }
