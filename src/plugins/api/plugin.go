@@ -93,5 +93,6 @@ func (p *ApiPlugin) ImageRemoved(image string) error {
 }
 
 func shouldCacheContainerInfo(cname string, image string) bool {
+	// vast.ai containers only
 	return strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")
 }
