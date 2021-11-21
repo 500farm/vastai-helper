@@ -3,7 +3,7 @@ PROGRAM=vastai-helper
 
 .PHONY: build clean install
 
-bin/$(PROGRAM): src/*.go
+bin/$(PROGRAM): src/*.go src/plugins/api/*.go src/plugins/autoprune/*.go src/plugins/netattach/*.go
 	go build -o bin/$(PROGRAM) src/*.go
 
 build: bin/$(PROGRAM)
