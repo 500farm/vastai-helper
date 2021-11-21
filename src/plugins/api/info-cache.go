@@ -251,22 +251,22 @@ func (c *ContainerInfo) shouldExpose() bool {
 	return !c.isMiningImage()
 }
 
-func shouldCacheContainerInfo(cname string, image string) bool {
-	return strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")
-}
-
-func (inst *ContainerInfo) statusOrder() int {
-	if inst.Status == "running" {
+func (c *ContainerInfo) statusOrder() int {
+	if c.Status == "running" {
 		return 0
 	}
-	if inst.Status == "paused" || inst.Status == "restarting" {
+	if c.Status == "paused" || c.Status == "restarting" {
 		return 1
 	}
-	if inst.Status == "exited" {
+	if c.Status == "exited" {
 		return 2
 	}
-	if inst.Status == "created" {
+	if c.Status == "created" {
 		return 3
 	}
 	return 4
+}
+
+func shouldCacheContainerInfo(cname string, image string) bool {
+	return strings.HasPrefix(cname, "C.") || strings.HasPrefix(cname, "/C.")
 }
